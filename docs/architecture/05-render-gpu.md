@@ -1,5 +1,9 @@
 # 05 レンダラーと GPU
 
+## PERF-010: 直接色変換と動画出力共有
+
+[ADR-0162](../adr/0162-direct-color-and-shared-video-delivery.md)に従い、SDR/HDR/tone-mapの演算順と丸め境界を保ってtileからpacked bundleのstride/offsetへ直接書く。同じ背景bit列・transfer・tone-map・packed formatのlegはowner bufferを共有し、Movieのnative constructor設定と共通raster/PTS/bitrate/runtimeまで一致する場合はvideo stageも共有する。二組のframe ownership・独立native runtime threadを維持し、container/音声/chapters/export hashと最終検証・publicationは各legに残す。GIFは色変換だけ共有し二段階を維持する。追加workerや変換threads2/4の採否と受け入れは[PERF-010](../testing/perf-010.md)で追跡する。
+
 ## PERF-008: 不変presentationと変換source共有
 
 [ADR-0160](../adr/0160-shared-presentations-and-converted-source-cache.md)に従い、MediaSessionのSceneKey別cursorは維持し、検証後の実presentationをRGBA変換前に共有する。source cacheは8件/256MiBのpixel・sampler/LUT・key payload、native presentationは既存のcursor個数/512MiB予算。不変sourceはArcで共有する。SDRのfull-source f32展開を行わず、HDR/flowは既存のlinear imageを共有する。各アクセス前後の資産検証とcolor/stream lockを維持し、flowの要求時刻・reverse・HDR/working spaceを区別する。native converterは各formatの1slotを設定一致中保持する。受け入れは[PERF-008](../testing/perf-008.md)で追跡する。
@@ -11,7 +15,7 @@
 ## PERF-004: 二組のframeによるdelivery pipeline
 
 [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md)に従い、Movie/GIFのtile render・色変換はcaller thread、
-native encodeとGIF第二段階は専用threadで行う。per-leg RGBA8/RGBA64を二組だけ循環させ、
+native encodeとGIF第二段階は専用threadで行う。ADR-0162の同条件owner別RGBA8/RGBA64を二組だけ循環させ、
 queue・consumer・recycle・finishを含めて追加pending frameを持たない。固定frame gridからPTS/spanを先に決める。
 専用threadは同一directoryの独立Runtimeを開きcapability一致を確認し、native handle/error bufferやRcをthread間で渡さない。
 GIF第二段階はpooled bufferを再利用し、callerのcheckpoint gateを待つ。全失敗でdisconnect/join後にstageを回収する。
@@ -381,7 +385,7 @@ synthetic root 省略分も安全側の差になる。
 永続 cache・pool・geometry・font・driver の予算/実測はこの中間面 payload 推定と区別する。
 512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
 一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
-Movie/GIFは [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md) の二組のper-leg RGBA8/RGBA64を循環させ、
+Movie/GIFは [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md)・[ADR-0162](../adr/0162-direct-color-and-shared-video-delivery.md) の二組のowner別RGBA8/RGBA64を循環させ、
 callerのtile render・変換と独立Runtimeのnative encodeを重ねる。追加pending frameや全画面float32面は保持しない。
 音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
 [RENDER-003](../testing/render-003.md) を参照する。

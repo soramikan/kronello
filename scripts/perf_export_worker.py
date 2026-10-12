@@ -57,11 +57,19 @@ def rss(pid):
 
 def independent_oracle(path, ffmpeg, ffprobe):
     result = subprocess.run([ffprobe, "-v", "error", "-show_streams",
-                             "-show_packets", "-show_format", "-of", "json", str(path)],
+                             "-show_packets", "-show_data_hash", "sha256", "-show_format", "-show_chapters", "-of", "json", str(path)],
                             capture_output=True, text=True, check=True, timeout=600)
     probe = json.loads(result.stdout)
     streams = []
     for stream in probe["streams"]:
+        if stream["codec_type"] not in ("audio", "video"):
+            # MOV chapter text is a data stream, not PCM. Chapter contents
+            # are compared separately using ffprobe's show_chapters output.
+            streams.append({"codec_type": stream["codec_type"],
+                            "codec": stream["codec_name"],
+                            "time_base": stream["time_base"],
+                            "duration_ts": stream.get("duration_ts")})
+            continue
         index = stream["index"]
         video = stream["codec_type"] == "video"
         pixel_format = stream.get("pix_fmt")
@@ -81,20 +89,47 @@ def independent_oracle(path, ffmpeg, ffprobe):
             if decoder.wait(timeout=600):
                 raise RuntimeError(f"independent decode failed: {path}")
         time_base = Fraction(stream["time_base"])
-        packets = [{key: str(Fraction(packet[key]) * time_base)
-                    for key in ("pts", "dts", "duration") if key in packet}
-                   for packet in probe["packets"] if packet["stream_index"] == index]
+        packets = []
+        for packet in probe["packets"]:
+            if packet["stream_index"] != index:
+                continue
+            record = {key: str(Fraction(packet[key]) * time_base)
+                      for key in ("pts", "dts", "duration") if key in packet}
+            # Preserve codec priming/discard padding, without volatile file offsets.
+            if packet.get("side_data_list"):
+                record["side_data"] = packet["side_data_list"]
+            record["data_hash"] = packet["data_hash"]
+            packets.append(record)
         streams.append({"codec_type": stream["codec_type"],
                         "codec": stream["codec_name"], "pixel_format": pixel_format,
                         "sample_rate": stream.get("sample_rate"),
                         "channels": stream.get("channels"),
                         "channel_layout": stream.get("channel_layout"),
+                        "width": stream.get("width"), "height": stream.get("height"),
+                        "color_primaries": stream.get("color_primaries"),
+                        "color_transfer": stream.get("color_transfer"),
+                        "color_matrix": stream.get("color_space"),
+                        "color_range": stream.get("color_range"),
+                        "initial_padding": stream.get("initial_padding"),
                         "decoded_sha256": sha.hexdigest(), "decoded_bytes": count,
                         "packets": packets})
     return {"encoded_sha256": digest(path), "encoded_bytes": path.stat().st_size,
             "streams": streams, "chapters": probe.get("chapters", []),
             "snapshot_tags": {k: v for k, v in probe["format"].get("tags", {}).items()
                               if "snapshot" in k}}
+
+
+def semantic_streams(oracle):
+    # Compressed bytes are an independent comparison: some native encoders
+    # insert per-session data while decoded samples and packet times match.
+    result = []
+    for stream in oracle['streams']:
+        copy = dict(stream)
+        if 'packets' in stream:
+            copy['packets'] = [{k: v for k, v in packet.items() if k != 'data_hash'}
+                               for packet in stream['packets']]
+        result.append(copy)
+    return result
 
 
 def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None):
@@ -292,10 +327,16 @@ def main():
             assert pair[0]["report"][identity] == pair[1]["report"][identity], identity
         assert pair[0]["report"]["sample_range"] == pair[1]["report"]["sample_range"]
         for left, right in zip(pair[0]["oracles"], pair[1]["oracles"], strict=True):
-            assert left["streams"] == right["streams"], "decoded bits / PTS / layout"
+            assert semantic_streams(left) == semantic_streams(right), "decoded bits / PTS / layout / color / priming"
             assert left["snapshot_tags"] == right["snapshot_tags"], "container identity"
+            assert left["chapters"] == right["chapters"], "chapters"
     evidence["comparison"] = {"all_decoded_bits_pts_layout_equal": True,
                               "all_snapshot_hashes_equal": True,
+                              "all_chapters_and_packet_side_data_equal": True,
+                              "all_packet_payload_equal": all(
+                                  left['streams'] == right['streams']
+                                  for pair in pairs for left, right in
+                                  zip(pair[0]['oracles'], pair[1]['oracles'], strict=True)),
                               "all_encoded_bytes_equal": all(
                                   left["encoded_sha256"] == right["encoded_sha256"]
                                   for pair in pairs for left, right in

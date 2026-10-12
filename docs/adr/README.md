@@ -175,7 +175,7 @@
 | [0149](0149-codec-parallelism-and-packet-spans.md) | Codec別並列度と遅延packetのspan | 採用 | 2026-10-11 |
 | [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 部分置換（0159） | 2026-10-11 |
 | [0151](0151-bounded-playback-pcm-sharing.md) | 再生準備の有界PCM共有 | 部分置換（0155） | 2026-10-11 |
-| [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 採用 | 2026-10-11 |
+| [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 部分置換（0162） | 2026-10-11 |
 | [0153](0153-expected-hash-verification-memo.md) | 資産検証メモを期待hashへ結び付ける | 採用 | 2026-10-11 |
 
 | [0154](0154-verified-sparse-presentation-seek.md) | 検証済み提示区間による有界の疎なシーク索引 | 採用（PERF-005受け入れ済み） | 2026-10-11 |
@@ -191,6 +191,7 @@
 | [0160](0160-shared-presentations-and-converted-source-cache.md) | 不変presentation共有と変換前source cache | 採用（PERF-008受け入れ済み） | 2026-10-12 |
 
 | [0161](0161-time-based-worker-progress-and-control-gates.md) | worker制御確認と時間駆動の進捗保存 | 採用（PERF-009受け入れ済み） | 2026-10-12 |
+| [0162](0162-direct-color-and-shared-video-delivery.md) | 直接色変換と同条件の動画delivery共有 | 採用（PERF-010受け入れ進行中） | 2026-10-12 |
 
 ## 追加と変更の規則
 

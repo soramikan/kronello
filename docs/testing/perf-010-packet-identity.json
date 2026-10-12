@@ -1,0 +1,3308 @@
+{
+  "schema_version": 1,
+  "videotoolbox_private_sei_normalization_enabled": true,
+  "records": [
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/evidence.json",
+      "raw_sha256": "64d1521dee9ee4af02b17644f4988612551e40bdc11fa173d396e7bf6bc0a288",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/0-before/movie.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/0-before/additional-0.mov",
+              "encoded_sha256": "8aa3333d9522e09708ce2d451ed63619e77d1a494463a36d8d66c138b6e6fed8",
+              "packet_metadata_sha256": "4ea68d0e5e754cc1869f40334f3bdfc693ea01cc52a6e2f57167b1203b8f2e58",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/0-before/additional-1.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/0-after/movie.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/0-after/additional-0.mov",
+              "encoded_sha256": "8aa3333d9522e09708ce2d451ed63619e77d1a494463a36d8d66c138b6e6fed8",
+              "packet_metadata_sha256": "4ea68d0e5e754cc1869f40334f3bdfc693ea01cc52a6e2f57167b1203b8f2e58",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/0-after/additional-1.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/1-after/movie.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/1-after/additional-0.mov",
+              "encoded_sha256": "8aa3333d9522e09708ce2d451ed63619e77d1a494463a36d8d66c138b6e6fed8",
+              "packet_metadata_sha256": "4ea68d0e5e754cc1869f40334f3bdfc693ea01cc52a6e2f57167b1203b8f2e58",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/1-after/additional-1.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/1-before/movie.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/1-before/additional-0.mov",
+              "encoded_sha256": "8aa3333d9522e09708ce2d451ed63619e77d1a494463a36d8d66c138b6e6fed8",
+              "packet_metadata_sha256": "4ea68d0e5e754cc1869f40334f3bdfc693ea01cc52a6e2f57167b1203b8f2e58",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/1-before/additional-1.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/2-before/movie.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/2-before/additional-0.mov",
+              "encoded_sha256": "8aa3333d9522e09708ce2d451ed63619e77d1a494463a36d8d66c138b6e6fed8",
+              "packet_metadata_sha256": "4ea68d0e5e754cc1869f40334f3bdfc693ea01cc52a6e2f57167b1203b8f2e58",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/2-before/additional-1.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/2-after/movie.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/2-after/additional-0.mov",
+              "encoded_sha256": "8aa3333d9522e09708ce2d451ed63619e77d1a494463a36d8d66c138b6e6fed8",
+              "packet_metadata_sha256": "4ea68d0e5e754cc1869f40334f3bdfc693ea01cc52a6e2f57167b1203b8f2e58",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/duplicate-chapters-sws1-v2/2-after/additional-1.mov",
+              "encoded_sha256": "240bd3d141f31262ce8f62500d38ce8904550132f7fc3806f2b3d5481b5d5100",
+              "packet_metadata_sha256": "4fc3557a34c109bf57841b492db616caf47b8681c77b15a2869a075908fba3d2",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2,
+                0
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/evidence.json",
+      "raw_sha256": "7820ea10773cdb4acc3e845f329b8793e41be9621fd3695d6fccee7359e669d5",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/0-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/0-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/0-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/0-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/1-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/1-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/1-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/1-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/2-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/2-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/2-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-duplicate-v2/2-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/evidence.json",
+      "raw_sha256": "29f36e8fd6d3e30f9778953f17a0043141e668bdd741e862bcbe8eaa306c26c7",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/0-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/0-before/additional-0.mp4",
+              "encoded_sha256": "9c535867d6230bf41031b16149e20896c309fabf01e53246a2b76a4b8bf890b4",
+              "packet_metadata_sha256": "93f451116a225a00cf0de9b46e55deb78cb2befcada62ff03b8b1dbc60d7f623",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                25
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/0-before/additional-1.webm",
+              "encoded_sha256": "7516081258689baceee16cb28246a7ac6361ab9a234dea68b112b4648188f4d4",
+              "packet_metadata_sha256": "998a8ad6066c94a70fcef9d47d9b0d5af33cf5bdbeb8cba596c6030a7a95ccdb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                26
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/0-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/0-after/additional-0.mp4",
+              "encoded_sha256": "9c535867d6230bf41031b16149e20896c309fabf01e53246a2b76a4b8bf890b4",
+              "packet_metadata_sha256": "93f451116a225a00cf0de9b46e55deb78cb2befcada62ff03b8b1dbc60d7f623",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                25
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/0-after/additional-1.webm",
+              "encoded_sha256": "eb4ae0b50a5d9116a8eec1d266f9cbb05dd017eeec14f7178b6c8ea89d6c47a1",
+              "packet_metadata_sha256": "998a8ad6066c94a70fcef9d47d9b0d5af33cf5bdbeb8cba596c6030a7a95ccdb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                26
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/1-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/1-after/additional-0.mp4",
+              "encoded_sha256": "9c535867d6230bf41031b16149e20896c309fabf01e53246a2b76a4b8bf890b4",
+              "packet_metadata_sha256": "93f451116a225a00cf0de9b46e55deb78cb2befcada62ff03b8b1dbc60d7f623",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                25
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/1-after/additional-1.webm",
+              "encoded_sha256": "befbe567925ed58473d670095ca804853ae721ab187f88ed720cbfc3eb0a946d",
+              "packet_metadata_sha256": "998a8ad6066c94a70fcef9d47d9b0d5af33cf5bdbeb8cba596c6030a7a95ccdb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                26
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/1-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/1-before/additional-0.mp4",
+              "encoded_sha256": "9c535867d6230bf41031b16149e20896c309fabf01e53246a2b76a4b8bf890b4",
+              "packet_metadata_sha256": "93f451116a225a00cf0de9b46e55deb78cb2befcada62ff03b8b1dbc60d7f623",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                25
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/1-before/additional-1.webm",
+              "encoded_sha256": "09adf7f7f554f29b91eea1063a2a0df039b44185bea13009395c6dc333d38fe3",
+              "packet_metadata_sha256": "998a8ad6066c94a70fcef9d47d9b0d5af33cf5bdbeb8cba596c6030a7a95ccdb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                26
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/2-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/2-before/additional-0.mp4",
+              "encoded_sha256": "9c535867d6230bf41031b16149e20896c309fabf01e53246a2b76a4b8bf890b4",
+              "packet_metadata_sha256": "93f451116a225a00cf0de9b46e55deb78cb2befcada62ff03b8b1dbc60d7f623",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                25
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/2-before/additional-1.webm",
+              "encoded_sha256": "69391da6ae8b0c1e5fca3ae9e1d5a379cf0fee938f3bd281116f6292a386f0ed",
+              "packet_metadata_sha256": "998a8ad6066c94a70fcef9d47d9b0d5af33cf5bdbeb8cba596c6030a7a95ccdb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                26
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/2-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/2-after/additional-0.mp4",
+              "encoded_sha256": "9c535867d6230bf41031b16149e20896c309fabf01e53246a2b76a4b8bf890b4",
+              "packet_metadata_sha256": "93f451116a225a00cf0de9b46e55deb78cb2befcada62ff03b8b1dbc60d7f623",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                25
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-1080-av1-mixed-audio-containers/2-after/additional-1.webm",
+              "encoded_sha256": "fc9c8d9f6a67341e25d2a4eb99831ba5b0251fbe3f4c7f24ce93075ad0e3ec4a",
+              "packet_metadata_sha256": "998a8ad6066c94a70fcef9d47d9b0d5af33cf5bdbeb8cba596c6030a7a95ccdb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                26
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/evidence.json",
+      "raw_sha256": "29f1152e4c0f05eb759a129eb4fcbc8ee0300bc99c2cd740ed5af31a67097607",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/0-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/0-before/additional-0.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/0-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/0-after/additional-0.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/1-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/1-after/additional-0.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/1-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/1-before/additional-0.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/2-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/2-before/additional-0.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/2-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-distinct-background/2-after/additional-0.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/evidence.json",
+      "raw_sha256": "bf3e61d9ead1d5ba9be5b4c51aa37b06f6ccc839ae04db0ad4c672a61381f357",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/0-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/0-before/additional-0.mxf",
+              "encoded_sha256": "bc9b6ab8c5afc9c73437aa0366a38ed12136372ae18aa460ef5bc7054736a7f2",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/0-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/0-after/additional-0.mxf",
+              "encoded_sha256": "2e01e8408ef6563c48255543ab9d07831c97460045fdb5b897bfa4a6e8120f22",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/1-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/1-after/additional-0.mxf",
+              "encoded_sha256": "f04c6c711b717664853d8af586f5ad7e8a98b94efd77a11269176ddd8e5b5ed9",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/1-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/1-before/additional-0.mxf",
+              "encoded_sha256": "800737366ae13fbcb24e50d674b3098d323ded43ca246e2d78f987c753de2884",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/2-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/2-before/additional-0.mxf",
+              "encoded_sha256": "5c8fb0db008c97fe755bdb0bd25d01dd673d6c55aa21296a9b56bb912301ad23",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/2-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-dnx-mov-mxf/2-after/additional-0.mxf",
+              "encoded_sha256": "3352adc4e22562a0b7374e15d08948e3d7d8fd2898de17517e88b5e6e6b896b5",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/evidence.json",
+      "raw_sha256": "d5bf07339791e6bd2cabf52732b67c3b58cc863388620b1ad60c43f3b79dc890",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/0-before/movie.mov",
+              "encoded_sha256": "cece2d59036312d97eaa5313a524ba2aff14686c6cd19110bd86e557c5b30eff",
+              "packet_metadata_sha256": "a90abcce8b63f0a6ec84ba43fedd91ce26abede5a85a5000f6bc88fd68df2735",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/0-before/additional-0.mov",
+              "encoded_sha256": "c12fb14856f7311bc661b4531939b6fa50d3a96892ac2ebc4c5f08694ae8ae6d",
+              "packet_metadata_sha256": "8f17092b54cef1ef963903fdc45f75a901da316ad25018c1e06ce4e95cba5367",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/0-after/movie.mov",
+              "encoded_sha256": "cece2d59036312d97eaa5313a524ba2aff14686c6cd19110bd86e557c5b30eff",
+              "packet_metadata_sha256": "a90abcce8b63f0a6ec84ba43fedd91ce26abede5a85a5000f6bc88fd68df2735",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/0-after/additional-0.mov",
+              "encoded_sha256": "c12fb14856f7311bc661b4531939b6fa50d3a96892ac2ebc4c5f08694ae8ae6d",
+              "packet_metadata_sha256": "8f17092b54cef1ef963903fdc45f75a901da316ad25018c1e06ce4e95cba5367",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/1-after/movie.mov",
+              "encoded_sha256": "cece2d59036312d97eaa5313a524ba2aff14686c6cd19110bd86e557c5b30eff",
+              "packet_metadata_sha256": "a90abcce8b63f0a6ec84ba43fedd91ce26abede5a85a5000f6bc88fd68df2735",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/1-after/additional-0.mov",
+              "encoded_sha256": "c12fb14856f7311bc661b4531939b6fa50d3a96892ac2ebc4c5f08694ae8ae6d",
+              "packet_metadata_sha256": "8f17092b54cef1ef963903fdc45f75a901da316ad25018c1e06ce4e95cba5367",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/1-before/movie.mov",
+              "encoded_sha256": "cece2d59036312d97eaa5313a524ba2aff14686c6cd19110bd86e557c5b30eff",
+              "packet_metadata_sha256": "a90abcce8b63f0a6ec84ba43fedd91ce26abede5a85a5000f6bc88fd68df2735",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/1-before/additional-0.mov",
+              "encoded_sha256": "c12fb14856f7311bc661b4531939b6fa50d3a96892ac2ebc4c5f08694ae8ae6d",
+              "packet_metadata_sha256": "8f17092b54cef1ef963903fdc45f75a901da316ad25018c1e06ce4e95cba5367",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/2-before/movie.mov",
+              "encoded_sha256": "cece2d59036312d97eaa5313a524ba2aff14686c6cd19110bd86e557c5b30eff",
+              "packet_metadata_sha256": "a90abcce8b63f0a6ec84ba43fedd91ce26abede5a85a5000f6bc88fd68df2735",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/2-before/additional-0.mov",
+              "encoded_sha256": "c12fb14856f7311bc661b4531939b6fa50d3a96892ac2ebc4c5f08694ae8ae6d",
+              "packet_metadata_sha256": "8f17092b54cef1ef963903fdc45f75a901da316ad25018c1e06ce4e95cba5367",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/2-after/movie.mov",
+              "encoded_sha256": "cece2d59036312d97eaa5313a524ba2aff14686c6cd19110bd86e557c5b30eff",
+              "packet_metadata_sha256": "a90abcce8b63f0a6ec84ba43fedd91ce26abede5a85a5000f6bc88fd68df2735",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-prores-dnx-distinct-encoders/2-after/additional-0.mov",
+              "encoded_sha256": "c12fb14856f7311bc661b4531939b6fa50d3a96892ac2ebc4c5f08694ae8ae6d",
+              "packet_metadata_sha256": "8f17092b54cef1ef963903fdc45f75a901da316ad25018c1e06ce4e95cba5367",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/evidence.json",
+      "raw_sha256": "007b1ac4606c5665e33de2e62d9b8ac6393bee264a2b6652778ce42f12dc232f",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/0-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/0-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/1-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/1-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/2-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-single-direct/2-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/evidence.json",
+      "raw_sha256": "8211e4df0a11532cba17a82b653283bf36e5d8f129fdc31946f16620ad8eddc8",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/0-before/movie.mov",
+              "encoded_sha256": "c4bbf0c96696cb68a115541e10277c3a447702fdaaadb0886cb0d9d2ff726e21",
+              "packet_metadata_sha256": "dcb6a4029df8ca3c8bdc25019c83881680a0f9b4652842d1ce6ee49fc18a7314",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/0-before/additional-0.mov",
+              "encoded_sha256": "716db793975141be8c8b2f7cf2fa1034c7cbec11849dd1f51e190f540e758734",
+              "packet_metadata_sha256": "692617db0d5b047e4f0703777823f8d820d3351d072289806f1ec0e569a32842",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/0-after/movie.mov",
+              "encoded_sha256": "c4bbf0c96696cb68a115541e10277c3a447702fdaaadb0886cb0d9d2ff726e21",
+              "packet_metadata_sha256": "dcb6a4029df8ca3c8bdc25019c83881680a0f9b4652842d1ce6ee49fc18a7314",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/0-after/additional-0.mov",
+              "encoded_sha256": "716db793975141be8c8b2f7cf2fa1034c7cbec11849dd1f51e190f540e758734",
+              "packet_metadata_sha256": "692617db0d5b047e4f0703777823f8d820d3351d072289806f1ec0e569a32842",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/1-after/movie.mov",
+              "encoded_sha256": "c4bbf0c96696cb68a115541e10277c3a447702fdaaadb0886cb0d9d2ff726e21",
+              "packet_metadata_sha256": "dcb6a4029df8ca3c8bdc25019c83881680a0f9b4652842d1ce6ee49fc18a7314",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/1-after/additional-0.mov",
+              "encoded_sha256": "716db793975141be8c8b2f7cf2fa1034c7cbec11849dd1f51e190f540e758734",
+              "packet_metadata_sha256": "692617db0d5b047e4f0703777823f8d820d3351d072289806f1ec0e569a32842",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/1-before/movie.mov",
+              "encoded_sha256": "c4bbf0c96696cb68a115541e10277c3a447702fdaaadb0886cb0d9d2ff726e21",
+              "packet_metadata_sha256": "dcb6a4029df8ca3c8bdc25019c83881680a0f9b4652842d1ce6ee49fc18a7314",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/1-before/additional-0.mov",
+              "encoded_sha256": "716db793975141be8c8b2f7cf2fa1034c7cbec11849dd1f51e190f540e758734",
+              "packet_metadata_sha256": "692617db0d5b047e4f0703777823f8d820d3351d072289806f1ec0e569a32842",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/2-before/movie.mov",
+              "encoded_sha256": "c4bbf0c96696cb68a115541e10277c3a447702fdaaadb0886cb0d9d2ff726e21",
+              "packet_metadata_sha256": "dcb6a4029df8ca3c8bdc25019c83881680a0f9b4652842d1ce6ee49fc18a7314",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/2-before/additional-0.mov",
+              "encoded_sha256": "716db793975141be8c8b2f7cf2fa1034c7cbec11849dd1f51e190f540e758734",
+              "packet_metadata_sha256": "692617db0d5b047e4f0703777823f8d820d3351d072289806f1ec0e569a32842",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/2-after/movie.mov",
+              "encoded_sha256": "c4bbf0c96696cb68a115541e10277c3a447702fdaaadb0886cb0d9d2ff726e21",
+              "packet_metadata_sha256": "dcb6a4029df8ca3c8bdc25019c83881680a0f9b4652842d1ce6ee49fc18a7314",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-4k-transparent-background/2-after/additional-0.mov",
+              "encoded_sha256": "716db793975141be8c8b2f7cf2fa1034c7cbec11849dd1f51e190f540e758734",
+              "packet_metadata_sha256": "692617db0d5b047e4f0703777823f8d820d3351d072289806f1ec0e569a32842",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/evidence.json",
+      "raw_sha256": "84e98d60f1830c574868cadfaf9e105dd575c0c99c9c5279c442eb7f02cc80e2",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/0-before/movie.mov",
+              "encoded_sha256": "592fac99cb094ba77ffecaff8309b7c508412634a23c7d8377abdef64071a2ff",
+              "packet_metadata_sha256": "6016505439baed20ca8cd422ada93d40ae49c390da3e532be34db055bdd925e3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/0-before/additional-0.mov",
+              "encoded_sha256": "69ae895c348a25116379866df450f31dd1fa3ddec02aef0d1dad35181eeb51f8",
+              "packet_metadata_sha256": "776ae21da2d6147e9f23d7f15b0f46256416ec58c57c228f456afa83ab620147",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/0-after/movie.mov",
+              "encoded_sha256": "592fac99cb094ba77ffecaff8309b7c508412634a23c7d8377abdef64071a2ff",
+              "packet_metadata_sha256": "6016505439baed20ca8cd422ada93d40ae49c390da3e532be34db055bdd925e3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/0-after/additional-0.mov",
+              "encoded_sha256": "69ae895c348a25116379866df450f31dd1fa3ddec02aef0d1dad35181eeb51f8",
+              "packet_metadata_sha256": "776ae21da2d6147e9f23d7f15b0f46256416ec58c57c228f456afa83ab620147",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/1-after/movie.mov",
+              "encoded_sha256": "592fac99cb094ba77ffecaff8309b7c508412634a23c7d8377abdef64071a2ff",
+              "packet_metadata_sha256": "6016505439baed20ca8cd422ada93d40ae49c390da3e532be34db055bdd925e3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/1-after/additional-0.mov",
+              "encoded_sha256": "69ae895c348a25116379866df450f31dd1fa3ddec02aef0d1dad35181eeb51f8",
+              "packet_metadata_sha256": "776ae21da2d6147e9f23d7f15b0f46256416ec58c57c228f456afa83ab620147",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/1-before/movie.mov",
+              "encoded_sha256": "592fac99cb094ba77ffecaff8309b7c508412634a23c7d8377abdef64071a2ff",
+              "packet_metadata_sha256": "6016505439baed20ca8cd422ada93d40ae49c390da3e532be34db055bdd925e3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/1-before/additional-0.mov",
+              "encoded_sha256": "69ae895c348a25116379866df450f31dd1fa3ddec02aef0d1dad35181eeb51f8",
+              "packet_metadata_sha256": "776ae21da2d6147e9f23d7f15b0f46256416ec58c57c228f456afa83ab620147",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/2-before/movie.mov",
+              "encoded_sha256": "592fac99cb094ba77ffecaff8309b7c508412634a23c7d8377abdef64071a2ff",
+              "packet_metadata_sha256": "6016505439baed20ca8cd422ada93d40ae49c390da3e532be34db055bdd925e3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/2-before/additional-0.mov",
+              "encoded_sha256": "69ae895c348a25116379866df450f31dd1fa3ddec02aef0d1dad35181eeb51f8",
+              "packet_metadata_sha256": "776ae21da2d6147e9f23d7f15b0f46256416ec58c57c228f456afa83ab620147",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/2-after/movie.mov",
+              "encoded_sha256": "592fac99cb094ba77ffecaff8309b7c508412634a23c7d8377abdef64071a2ff",
+              "packet_metadata_sha256": "6016505439baed20ca8cd422ada93d40ae49c390da3e532be34db055bdd925e3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-document-audio-silence-video-share/2-after/additional-0.mov",
+              "encoded_sha256": "69ae895c348a25116379866df450f31dd1fa3ddec02aef0d1dad35181eeb51f8",
+              "packet_metadata_sha256": "776ae21da2d6147e9f23d7f15b0f46256416ec58c57c228f456afa83ab620147",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/evidence.json",
+      "raw_sha256": "c4a61d2246777e79a18f9694ab787d2c24c903f066695458470e8a639bb97c5e",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/0-before/movie.mov",
+              "encoded_sha256": "fdbab06524619a4cf1f5bc1afe9e2306f58f6c978de0292bc7c19291b0338b41",
+              "packet_metadata_sha256": "5b7f396b1c8d501e2fa573a0dffeca43cb93f99b74877960afdb045de7256ec9",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/0-before/additional-0.gif",
+              "encoded_sha256": "04222cd4f2b064a26469730c51805d5669180adaeb06bf61cfe6b519e1cb2081",
+              "packet_metadata_sha256": "1875e3efb302ffff2a18ca407f23772b48f3784de4b6b217eb5dae191baaa8bf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/0-after/movie.mov",
+              "encoded_sha256": "fdbab06524619a4cf1f5bc1afe9e2306f58f6c978de0292bc7c19291b0338b41",
+              "packet_metadata_sha256": "5b7f396b1c8d501e2fa573a0dffeca43cb93f99b74877960afdb045de7256ec9",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/0-after/additional-0.gif",
+              "encoded_sha256": "04222cd4f2b064a26469730c51805d5669180adaeb06bf61cfe6b519e1cb2081",
+              "packet_metadata_sha256": "1875e3efb302ffff2a18ca407f23772b48f3784de4b6b217eb5dae191baaa8bf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/1-after/movie.mov",
+              "encoded_sha256": "fdbab06524619a4cf1f5bc1afe9e2306f58f6c978de0292bc7c19291b0338b41",
+              "packet_metadata_sha256": "5b7f396b1c8d501e2fa573a0dffeca43cb93f99b74877960afdb045de7256ec9",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/1-after/additional-0.gif",
+              "encoded_sha256": "04222cd4f2b064a26469730c51805d5669180adaeb06bf61cfe6b519e1cb2081",
+              "packet_metadata_sha256": "1875e3efb302ffff2a18ca407f23772b48f3784de4b6b217eb5dae191baaa8bf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/1-before/movie.mov",
+              "encoded_sha256": "fdbab06524619a4cf1f5bc1afe9e2306f58f6c978de0292bc7c19291b0338b41",
+              "packet_metadata_sha256": "5b7f396b1c8d501e2fa573a0dffeca43cb93f99b74877960afdb045de7256ec9",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/1-before/additional-0.gif",
+              "encoded_sha256": "04222cd4f2b064a26469730c51805d5669180adaeb06bf61cfe6b519e1cb2081",
+              "packet_metadata_sha256": "1875e3efb302ffff2a18ca407f23772b48f3784de4b6b217eb5dae191baaa8bf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/2-before/movie.mov",
+              "encoded_sha256": "fdbab06524619a4cf1f5bc1afe9e2306f58f6c978de0292bc7c19291b0338b41",
+              "packet_metadata_sha256": "5b7f396b1c8d501e2fa573a0dffeca43cb93f99b74877960afdb045de7256ec9",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/2-before/additional-0.gif",
+              "encoded_sha256": "04222cd4f2b064a26469730c51805d5669180adaeb06bf61cfe6b519e1cb2081",
+              "packet_metadata_sha256": "1875e3efb302ffff2a18ca407f23772b48f3784de4b6b217eb5dae191baaa8bf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/2-after/movie.mov",
+              "encoded_sha256": "fdbab06524619a4cf1f5bc1afe9e2306f58f6c978de0292bc7c19291b0338b41",
+              "packet_metadata_sha256": "5b7f396b1c8d501e2fa573a0dffeca43cb93f99b74877960afdb045de7256ec9",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-gif-shared-color/2-after/additional-0.gif",
+              "encoded_sha256": "04222cd4f2b064a26469730c51805d5669180adaeb06bf61cfe6b519e1cb2081",
+              "packet_metadata_sha256": "1875e3efb302ffff2a18ca407f23772b48f3784de4b6b217eb5dae191baaa8bf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/evidence.json",
+      "raw_sha256": "c3a8ebf81bf6aee4d4e1293810be19a1d8ff68e98c13daf70f98f0b20b9a9f24",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": false,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/0-before/movie.mov",
+              "encoded_sha256": "b7733eec961e0ab4f8d1dc0f81be9f2a97d306c5eb14cd4d21e0a7d4db49be64",
+              "packet_metadata_sha256": "6f07d45e919a7aef4050d68c801ed113f62bfc6a3f50611037db7e29f4315739",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/0-before/additional-0.mov",
+              "encoded_sha256": "8d93b2742e7a06919e892b1f1fd58a9cd7b3bb1da41e39d1db011ee56fc4dacf",
+              "packet_metadata_sha256": "e83a541d6bbdaafb98d5e63f10498749a6217baa6f0eb5b44a46f60ee446b580",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                9
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/0-after/movie.mov",
+              "encoded_sha256": "4346a07bc79db9033a2f4080fcab39d9b958a409b7f16fd5aa8ed63e221f1cc8",
+              "packet_metadata_sha256": "6f07d45e919a7aef4050d68c801ed113f62bfc6a3f50611037db7e29f4315739",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/0-after/additional-0.mov",
+              "encoded_sha256": "762f2f7b1816553a1ceb7a811133c8f4b63a788bde556f0d8672453c01f99126",
+              "packet_metadata_sha256": "e83a541d6bbdaafb98d5e63f10498749a6217baa6f0eb5b44a46f60ee446b580",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                9
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/1-after/movie.mov",
+              "encoded_sha256": "0e7422380cbc25018e8607f36bebb9b32ed8b6aeb861e0b196ef3ca175f9d3d4",
+              "packet_metadata_sha256": "6f07d45e919a7aef4050d68c801ed113f62bfc6a3f50611037db7e29f4315739",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/1-after/additional-0.mov",
+              "encoded_sha256": "9dd67861e67e67ae1c36ef265af4223bdfbacb6f83f0c9605209439d7c470807",
+              "packet_metadata_sha256": "e83a541d6bbdaafb98d5e63f10498749a6217baa6f0eb5b44a46f60ee446b580",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                9
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/1-before/movie.mov",
+              "encoded_sha256": "c845dd1c070ee10e9ababedc68e846001fe2e6e29dcc0639bbdaef3c3af227e1",
+              "packet_metadata_sha256": "6f07d45e919a7aef4050d68c801ed113f62bfc6a3f50611037db7e29f4315739",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/1-before/additional-0.mov",
+              "encoded_sha256": "e21f7719275ff27979ae61c9b77a8cbfa3ebd55c6e94ae8d7635d5c4101b7369",
+              "packet_metadata_sha256": "e83a541d6bbdaafb98d5e63f10498749a6217baa6f0eb5b44a46f60ee446b580",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                9
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/2-before/movie.mov",
+              "encoded_sha256": "d89805bfe27ef230d7574367c2c59545b213eb0b3088d01a0b873a075145ad88",
+              "packet_metadata_sha256": "6f07d45e919a7aef4050d68c801ed113f62bfc6a3f50611037db7e29f4315739",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/2-before/additional-0.mov",
+              "encoded_sha256": "f6c210976a274c9d5bf127cfb358ce966ba20510b0682455d7ce554917754055",
+              "packet_metadata_sha256": "e83a541d6bbdaafb98d5e63f10498749a6217baa6f0eb5b44a46f60ee446b580",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                9
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/2-after/movie.mov",
+              "encoded_sha256": "7bad2f2d2887cd074b53f19a4181dda6f74aadd47bac29812bc03e4f71f3b245",
+              "packet_metadata_sha256": "6f07d45e919a7aef4050d68c801ed113f62bfc6a3f50611037db7e29f4315739",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-h264-mixed-audio-v2/2-after/additional-0.mov",
+              "encoded_sha256": "711445fecbe0dc19f42fbbd0e6781097c6c0bb0034ca3eca21db32feaca2c012",
+              "packet_metadata_sha256": "e83a541d6bbdaafb98d5e63f10498749a6217baa6f0eb5b44a46f60ee446b580",
+              "videotoolbox_private_sei_normalization": true,
+              "packet_counts": [
+                4,
+                9
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/evidence.json",
+      "raw_sha256": "ca4409372cb40de4d82456d7889e5168136131993ad9322ee928a94b41b07444",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-before/movie.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-before/additional-0.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-before/additional-1.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-before/additional-2.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-after/movie.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-after/additional-0.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-after/additional-1.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/0-after/additional-2.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-after/movie.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-after/additional-0.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-after/additional-1.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-after/additional-2.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-before/movie.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-before/additional-0.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-before/additional-1.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/1-before/additional-2.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-before/movie.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-before/additional-0.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-before/additional-1.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-before/additional-2.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-after/movie.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-after/additional-0.mov",
+              "encoded_sha256": "5e6981ca5147e9b2c77209be4c4c1f299eb3127425f1bc6f05a86ddf4de162be",
+              "packet_metadata_sha256": "cc2a2150e193f5c7becc8ebfbc6477176791d4c6cd7bfdd3f43c5a4e807e26cf",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-after/additional-1.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-hlg-and-sdr/2-after/additional-2.mov",
+              "encoded_sha256": "a05f2fe90a90edb715a3e81cb65485f0629992fdfbe281154330246c033260cf",
+              "packet_metadata_sha256": "5401c153b681f959eb4f5da04dc5f6e173ab226b980f305cc4a859927b5c8c9a",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/evidence.json",
+      "raw_sha256": "15ef052583cd8729305bf2dd4ac660f512e9432743bf9178da812ac267c55fbc",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-before/movie.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-before/additional-0.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-before/additional-1.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-before/additional-2.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-after/movie.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-after/additional-0.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-after/additional-1.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/0-after/additional-2.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-after/movie.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-after/additional-0.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-after/additional-1.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-after/additional-2.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-before/movie.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-before/additional-0.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-before/additional-1.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/1-before/additional-2.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-before/movie.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-before/additional-0.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-before/additional-1.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-before/additional-2.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-after/movie.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-after/additional-0.mov",
+              "encoded_sha256": "b7e249c843c215b95cf8f72f3ce7248b2b6dc2ff24cc59edabf9ea1da0c21d71",
+              "packet_metadata_sha256": "6e01e84470cb19795973c05cfe9874b85457f98a68c9689a7aa7820404cd6925",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-after/additional-1.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/matrix-hdr-pq-and-sdr/2-after/additional-2.mov",
+              "encoded_sha256": "b4ab1c2b6836d3b5d4071d9d92528377bb4b619473bebca094f8b034ec7f9da1",
+              "packet_metadata_sha256": "51a44cdd26956b5fdca86e26136bcbdaaeee82521419b693f07623cd0c67ceb3",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                4,
+                8
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/evidence.json",
+      "raw_sha256": "5a688bd331981a413511166260c0c76daed0f4b00272b036ead60193db3ada06",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/0-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/0-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/0-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/0-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/1-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/1-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/1-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/1-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/2-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/2-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/2-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-1080-av1-duplicate/2-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/evidence.json",
+      "raw_sha256": "7bd7142da4f3c5c6ff20e6aecff60e5ac6b0ae4986570fe96d21c9e8ef90ecaf",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/0-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/0-before/additional-0.mxf",
+              "encoded_sha256": "04677966a3233a567f2876ee210d55dbb0dec2dbbf43849773d5767c8ef39a0c",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/0-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/0-after/additional-0.mxf",
+              "encoded_sha256": "bdce08a1e2c022f56e552b0ac77e678da27b4f9fc1864bfa3c0e0ac755ae3e17",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/1-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/1-after/additional-0.mxf",
+              "encoded_sha256": "d733c6deb0702d53d376c7c68be1e3e90a6fb657389b7ba7c8dfe5369ae8bc91",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/1-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/1-before/additional-0.mxf",
+              "encoded_sha256": "a36949218ef1451a76f2df26e492630367f061269cc33c66bdc6df558de1a656",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/2-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/2-before/additional-0.mxf",
+              "encoded_sha256": "02af4592f0c696f805f7ff1a16c68b325708d65c5308bb1d212f5f6879401c7b",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/2-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-dnx-mov-mxf/2-after/additional-0.mxf",
+              "encoded_sha256": "330bb0a11666da9a7b08ccc5463f3a7104f6fef11cc0a040ff52bffcde47d5d6",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/evidence.json",
+      "raw_sha256": "a89a9c0324fed3abe5466c16b50e1b68d26fb0b53e14355ec0254f23a07f2888",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/0-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/0-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/1-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/1-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/2-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws2-4k-single-direct/2-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/evidence.json",
+      "raw_sha256": "049baff3bd392d480f1e7cb6e663d1ee7e11da7a79bfa7d39c17bee5e1b15f82",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/0-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/0-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/0-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/0-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/1-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/1-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/1-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/1-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/2-before/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/2-before/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/2-after/movie.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-1080-av1-duplicate/2-after/additional-0.mp4",
+              "encoded_sha256": "b1d17c0f52cfa4ad13e34eb901126bbf880c065284a9d3ea209f61adb1888884",
+              "packet_metadata_sha256": "a005afb6641a519b8f72dd82930bba820af03f88247349422384175814dd87d6",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                12,
+                6
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/evidence.json",
+      "raw_sha256": "d78eb9e78dbe180c15521a41fc04152bdba390a8984128f058c168cc2bb91270",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/0-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/0-before/additional-0.mxf",
+              "encoded_sha256": "a96cd6f33177e4f1d45314a13d5c81360478461821fd35b9afd2c111a3a6423b",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/0-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/0-after/additional-0.mxf",
+              "encoded_sha256": "ce9312d88b5f8cbb6550377023b1afda4d8c7741b72cf44c0d67dff5bae7e9f6",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/1-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/1-after/additional-0.mxf",
+              "encoded_sha256": "66e6e02a02f64f02e8ee1d7dfef5b455ecef6a25b06f3a8c3abfba02ea2d99e9",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/1-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/1-before/additional-0.mxf",
+              "encoded_sha256": "b0420c850318285d90c72494fff7f13445813c0497afeb4e6e6e1b9da256e5d8",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/2-before/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/2-before/additional-0.mxf",
+              "encoded_sha256": "f08ca4fa054250b3647295947db7221da1fb43e860db72695eb872e4c365fd43",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/2-after/movie.mov",
+              "encoded_sha256": "fda615087c830555a708e3b7f1f8aed231245f9ccd21ceb80aea38cdd668ad22",
+              "packet_metadata_sha256": "0515f233c1d9c58ec8dcaf5d93604c1f08b6629cba5918ffb00472c26a7c3a88",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-dnx-mov-mxf/2-after/additional-0.mxf",
+              "encoded_sha256": "4e173f439b936626f3fb914fa3ef465caf940f168958ad278c4a1eb8920765fb",
+              "packet_metadata_sha256": "11541cb13cb3adeffedfe7afd9190e138b4823c019a14b3de29bf438a99787ab",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/evidence.json",
+      "raw_sha256": "470b3b578a53ddb1b1576dcef356eef91537df5cd968aeb98e9bd0c27e8e5a8a",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/0-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/0-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/1-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/1-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/2-before/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/sws4-4k-single-direct/2-after/movie.mov",
+              "encoded_sha256": "c6dc7652473cc5239bb917d52ac864762f30b95dab5114263bc2c799815394fb",
+              "packet_metadata_sha256": "e24fc956105f01eeb0ab34afe3ee3dc3ae9125e2fa72f6ac9f3feca486613beb",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

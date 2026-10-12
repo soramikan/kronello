@@ -1,0 +1,2312 @@
+{
+  "schema_version": 1,
+  "quiet_host": false,
+  "records": [
+    {
+      "name": "duplicate-chapters-sws1-v2",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1984.208583002328,
+          "frame_stage": {
+            "first_frame_render_us": 1479309,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1921.4779589965474,
+          "subsequent_p95_ms": 1921.830665989546
+        },
+        "after": {
+          "first_ms": 2141.4797920006095,
+          "frame_stage": {
+            "first_frame_render_us": 1370868,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1747.7345419902122,
+          "subsequent_p95_ms": 1762.5583750050282
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 623509504,
+          "counts": {
+            "audio_mix_blocks": 3,
+            "audio_mixed_frames": 6000,
+            "checkpoint_callbacks": 6,
+            "native_codec_receive": 9,
+            "native_codec_send": 6,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 3,
+            "output_tile_conversions": 120,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 3,
+            "worker_checkpoint_calls": 6
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3597,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 199065600
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 46476,
+            "native_codec_send": 228138,
+            "native_codec_receive": 3,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 7,
+            "pipeline_consumer_input_wait": 1491912,
+            "output_color_conversion_copy": 179273
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 490160128,
+          "counts": {
+            "audio_mix_blocks": 3,
+            "audio_mixed_frames": 6000,
+            "checkpoint_callbacks": 6,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 6
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3597,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 16821,
+            "native_codec_send": 216012,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 10,
+            "pipeline_consumer_input_wait": 1370882,
+            "output_color_conversion_copy": 64828
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-1080-av1-duplicate-v2",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 5025.296333013102,
+          "frame_stage": {
+            "first_frame_render_us": 433200,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 376868,
+            "warm_frame_render_p95_us": 412114
+          },
+          "subsequent_p50_ms": 5025.193417008268,
+          "subsequent_p95_ms": 5082.559708011104
+        },
+        "after": {
+          "first_ms": 4752.919083999586,
+          "frame_stage": {
+            "first_frame_render_us": 422882,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 361893,
+            "warm_frame_render_p95_us": 367815
+          },
+          "subsequent_p50_ms": 4714.053417003015,
+          "subsequent_p95_ms": 4733.054917000118
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 977747968,
+          "counts": {
+            "audio_mix_blocks": 12,
+            "audio_mixed_frames": 48000,
+            "checkpoint_callbacks": 26,
+            "native_codec_receive": 50,
+            "native_codec_send": 26,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 24,
+            "output_tile_conversions": 288,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 24,
+            "worker_checkpoint_calls": 26
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 33177600
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 49520,
+            "native_codec_send": 288224,
+            "native_codec_receive": 29,
+            "pipeline_buffer_acquire": 5,
+            "pipeline_submit_wait": 37,
+            "pipeline_consumer_input_wait": 4506052,
+            "output_color_conversion_copy": 355911
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 850755584,
+          "counts": {
+            "audio_mix_blocks": 12,
+            "audio_mixed_frames": 48000,
+            "checkpoint_callbacks": 26,
+            "native_codec_receive": 25,
+            "native_codec_send": 13,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 12,
+            "output_direct_bytes": 99532800,
+            "output_tile_conversions": 144,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 12,
+            "worker_checkpoint_calls": 26
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 16588800
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 25255,
+            "native_codec_send": 143775,
+            "native_codec_receive": 15,
+            "pipeline_buffer_acquire": 6,
+            "pipeline_submit_wait": 36,
+            "pipeline_consumer_input_wait": 4385507,
+            "output_color_conversion_copy": 195951
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-1080-av1-mixed-audio-containers",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": false
+      },
+      "summary": {
+        "before": {
+          "first_ms": 5370.703166001476,
+          "frame_stage": {
+            "first_frame_render_us": 451128,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 400730,
+            "warm_frame_render_p95_us": 410268
+          },
+          "subsequent_p50_ms": 5331.431375001557,
+          "subsequent_p95_ms": 5461.806124993018
+        },
+        "after": {
+          "first_ms": 4715.882542004692,
+          "frame_stage": {
+            "first_frame_render_us": 414006,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 364854,
+            "warm_frame_render_p95_us": 372571
+          },
+          "subsequent_p50_ms": 4754.833541010157,
+          "subsequent_p95_ms": 4796.758416996454
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 1108705280,
+          "counts": {
+            "audio_mix_blocks": 55,
+            "audio_mixed_frames": 72000,
+            "checkpoint_callbacks": 69,
+            "native_codec_receive": 75,
+            "native_codec_send": 39,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 36,
+            "output_tile_conversions": 432,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 36,
+            "worker_checkpoint_calls": 69
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 49766400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 71877,
+            "native_codec_send": 430147,
+            "native_codec_receive": 56,
+            "pipeline_buffer_acquire": 6,
+            "pipeline_submit_wait": 39,
+            "pipeline_consumer_input_wait": 4669008,
+            "output_color_conversion_copy": 535644
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 850935808,
+          "counts": {
+            "audio_mix_blocks": 55,
+            "audio_mixed_frames": 72000,
+            "checkpoint_callbacks": 69,
+            "native_codec_receive": 25,
+            "native_codec_send": 13,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 12,
+            "output_direct_bytes": 99532800,
+            "output_tile_conversions": 144,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 12,
+            "worker_checkpoint_calls": 69
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 16588800
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 25010,
+            "native_codec_send": 144689,
+            "native_codec_receive": 25,
+            "pipeline_buffer_acquire": 7,
+            "pipeline_submit_wait": 37,
+            "pipeline_consumer_input_wait": 4396037,
+            "output_color_conversion_copy": 196198
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-4k-distinct-background",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1865.119791997131,
+          "frame_stage": {
+            "first_frame_render_us": 1441691,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1852.60612500133,
+          "subsequent_p95_ms": 1858.6953750054818
+        },
+        "after": {
+          "first_ms": 1844.939583010273,
+          "frame_stage": {
+            "first_frame_render_us": 1449537,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1859.5147079904564,
+          "subsequent_p95_ms": 1867.9093749960884
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 553664512,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 6,
+            "native_codec_send": 4,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 2,
+            "output_tile_conversions": 80,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 2,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 132710400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 32595,
+            "native_codec_send": 226738,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 9,
+            "pipeline_consumer_input_wait": 1441708,
+            "output_color_conversion_copy": 121444
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 552779776,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 6,
+            "native_codec_send": 4,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 2,
+            "output_direct_bytes": 66355200,
+            "output_tile_conversions": 80,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 2,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 132710400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 31062,
+            "native_codec_send": 226144,
+            "native_codec_receive": 0,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 11,
+            "pipeline_consumer_input_wait": 1443752,
+            "output_color_conversion_copy": 133472
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-4k-dnx-mov-mxf",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": false
+      },
+      "summary": {
+        "before": {
+          "first_ms": 2014.6096669923281,
+          "frame_stage": {
+            "first_frame_render_us": 1438099,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1976.0861249960726,
+          "subsequent_p95_ms": 1991.8260419945
+        },
+        "after": {
+          "first_ms": 1848.0430409981636,
+          "frame_stage": {
+            "first_frame_render_us": 1375367,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1856.7666250019101,
+          "subsequent_p95_ms": 1876.45708299533
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 2175238144,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 6,
+            "native_codec_send": 4,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 2,
+            "output_tile_conversions": 80,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 2,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 132710400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 32272,
+            "native_codec_send": 38079,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 11,
+            "pipeline_consumer_input_wait": 1453471,
+            "output_color_conversion_copy": 121912
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 1307901952,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 17468,
+            "native_codec_send": 39562,
+            "native_codec_receive": 0,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 13,
+            "pipeline_consumer_input_wait": 1376800,
+            "output_color_conversion_copy": 67019
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-4k-prores-dnx-distinct-encoders",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 7149.167124996893,
+          "frame_stage": {
+            "first_frame_render_us": 1808615,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 1407708,
+            "warm_frame_render_p95_us": 1651479
+          },
+          "subsequent_p50_ms": 6903.8328750029905,
+          "subsequent_p95_ms": 8987.701666002977
+        },
+        "after": {
+          "first_ms": 9879.443541009095,
+          "frame_stage": {
+            "first_frame_render_us": 1379916,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 1328620,
+            "warm_frame_render_p95_us": 1370600
+          },
+          "subsequent_p50_ms": 5997.217333992012,
+          "subsequent_p95_ms": 6278.975875000469
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 1577730048,
+          "counts": {
+            "audio_mix_blocks": 4,
+            "audio_mixed_frames": 16000,
+            "checkpoint_callbacks": 10,
+            "native_codec_receive": 18,
+            "native_codec_send": 10,
+            "native_frame_shared_hits": 156,
+            "native_rgba_to_yuv": 8,
+            "output_tile_conversions": 320,
+            "rendered_frames": 4,
+            "rendered_tiles": 160,
+            "source_frame_cache_hits": 156,
+            "source_frame_cache_misses": 4,
+            "source_rgba8_bytes": 132710400,
+            "source_rgba8_conversions": 4,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 3,
+            "video_encoder_frames": 8,
+            "worker_checkpoint_calls": 10
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 132722758,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 5470,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 132710400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 138694,
+            "native_codec_send": 255969,
+            "native_codec_receive": 7,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 20,
+            "pipeline_consumer_input_wait": 6301769,
+            "output_color_conversion_copy": 557525
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 1507393536,
+          "counts": {
+            "audio_mix_blocks": 4,
+            "audio_mixed_frames": 16000,
+            "checkpoint_callbacks": 10,
+            "native_codec_receive": 18,
+            "native_codec_send": 10,
+            "native_frame_shared_hits": 156,
+            "native_rgba_to_yuv": 8,
+            "output_direct_bytes": 132710400,
+            "output_tile_conversions": 160,
+            "rendered_frames": 4,
+            "rendered_tiles": 160,
+            "source_frame_cache_hits": 156,
+            "source_frame_cache_misses": 4,
+            "source_rgba8_bytes": 132710400,
+            "source_rgba8_conversions": 4,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 3,
+            "video_encoder_frames": 8,
+            "worker_checkpoint_calls": 10
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 132722758,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 5470,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 124421,
+            "native_codec_send": 221077,
+            "native_codec_receive": 4,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 18,
+            "pipeline_consumer_input_wait": 5562466,
+            "output_color_conversion_copy": 276629
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-4k-single-direct",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1767.8752079955302,
+          "frame_stage": {
+            "first_frame_render_us": 1385473,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1742.4652079935186,
+          "subsequent_p95_ms": 1764.0982500015525
+        },
+        "after": {
+          "first_ms": 1763.3146660082275,
+          "frame_stage": {
+            "first_frame_render_us": 1369526,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1743.851374994847,
+          "subsequent_p95_ms": 1767.184541997267
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 486277120,
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 16513,
+            "native_codec_send": 223508,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 8,
+            "pipeline_consumer_input_wait": 1385485,
+            "output_color_conversion_copy": 60429
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 488587264,
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 16713,
+            "native_codec_send": 222252,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 12,
+            "pipeline_consumer_input_wait": 1369545,
+            "output_color_conversion_copy": 65886
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-4k-transparent-background",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1539.2591669951798,
+          "frame_stage": {
+            "first_frame_render_us": 1277719,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1560.1502080098726,
+          "subsequent_p95_ms": 1573.7602089939173
+        },
+        "after": {
+          "first_ms": 1592.3855419969186,
+          "frame_stage": {
+            "first_frame_render_us": 1301683,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1586.9323749939213,
+          "subsequent_p95_ms": 1596.951416999218
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 196362240,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 6,
+            "native_codec_send": 4,
+            "native_rgba_to_yuv": 2,
+            "output_tile_conversions": 80,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "video_encoder_frames": 2,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "export_prepared_snapshot": 2910,
+            "export_sample_scenes": 1482,
+            "export_semantic_cache": 160,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "video_bundles": 132710400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 32786,
+            "native_codec_send": 133472,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 10,
+            "pipeline_consumer_input_wait": 1277734,
+            "output_color_conversion_copy": 182232
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 196640768,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 6,
+            "native_codec_send": 4,
+            "native_rgba_to_yuv": 2,
+            "output_direct_bytes": 66355200,
+            "output_tile_conversions": 80,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "video_encoder_frames": 2,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "export_prepared_snapshot": 2910,
+            "export_sample_scenes": 1482,
+            "export_semantic_cache": 160,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "video_bundles": 132710400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 31522,
+            "native_codec_send": 133877,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 10,
+            "pipeline_consumer_input_wait": 1305050,
+            "output_color_conversion_copy": 205212
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-document-audio-silence-video-share",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1010.346875002142,
+          "frame_stage": {
+            "first_frame_render_us": 119783,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 996.5242500038585,
+          "subsequent_p95_ms": 1003.9516249962617
+        },
+        "after": {
+          "first_ms": 1005.5856249964563,
+          "frame_stage": {
+            "first_frame_render_us": 119997,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1000.030750001315,
+          "subsequent_p95_ms": 1013.202750007622
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 413171712,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "audio_source_decodes": 1,
+            "audio_spool_chunks": 7043,
+            "checkpoint_callbacks": 7048,
+            "native_codec_receive": 6,
+            "native_codec_send": 4,
+            "native_frame_shared_hits": 1,
+            "native_rgba_to_yuv": 2,
+            "output_tile_conversions": 4,
+            "rendered_frames": 1,
+            "rendered_tiles": 2,
+            "source_frame_cache_hits": 1,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 2,
+            "worker_checkpoint_calls": 7048
+          },
+          "peak_payload_bytes": {
+            "audio_decode_chunk": 32768,
+            "audio_quantized_block": 16000,
+            "audio_source_windows": 32768,
+            "audio_spool_write_buffer": 32768,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 4448,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 3686400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 830,
+            "native_codec_send": 6600,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 8,
+            "pipeline_consumer_input_wait": 119796,
+            "output_color_conversion_copy": 3358
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 407470080,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "audio_source_decodes": 1,
+            "audio_spool_chunks": 7043,
+            "checkpoint_callbacks": 7048,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 1,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 921600,
+            "output_tile_conversions": 2,
+            "rendered_frames": 1,
+            "rendered_tiles": 2,
+            "source_frame_cache_hits": 1,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 7048
+          },
+          "peak_payload_bytes": {
+            "audio_decode_chunk": 32768,
+            "audio_quantized_block": 16000,
+            "audio_source_windows": 32768,
+            "audio_spool_write_buffer": 32768,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 4448,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 1843200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 411,
+            "native_codec_send": 6618,
+            "native_codec_receive": 0,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 9,
+            "pipeline_consumer_input_wait": 120014,
+            "output_color_conversion_copy": 1879
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-gif-shared-color",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 466.0517919983249,
+          "frame_stage": {
+            "first_frame_render_us": 116345,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 54101,
+            "warm_frame_render_p95_us": 57063
+          },
+          "subsequent_p50_ms": 444.57183399936184,
+          "subsequent_p95_ms": 451.6960420005489
+        },
+        "after": {
+          "first_ms": 438.8127499987604,
+          "frame_stage": {
+            "first_frame_render_us": 119285,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 53658,
+            "warm_frame_render_p95_us": 54789
+          },
+          "subsequent_p50_ms": 447.222500006319,
+          "subsequent_p95_ms": 478.1897079956252
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 515129344,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 8000,
+            "checkpoint_callbacks": 12,
+            "native_codec_receive": 9,
+            "native_codec_send": 5,
+            "native_frame_shared_hits": 4,
+            "native_rgba_to_yuv": 4,
+            "output_tile_conversions": 16,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "source_frame_cache_hits": 4,
+            "source_frame_cache_misses": 4,
+            "source_rgba8_bytes": 132710400,
+            "source_rgba8_conversions": 4,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 3,
+            "video_encoder_frames": 4,
+            "worker_checkpoint_calls": 12
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 132722758,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 5470,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 3686400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 1509,
+            "native_codec_send": 6241,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 16,
+            "pipeline_consumer_input_wait": 281363,
+            "output_color_conversion_copy": 13281
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 514424832,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 8000,
+            "checkpoint_callbacks": 12,
+            "native_codec_receive": 9,
+            "native_codec_send": 5,
+            "native_frame_shared_hits": 4,
+            "native_rgba_to_yuv": 4,
+            "output_direct_bytes": 3686400,
+            "output_tile_conversions": 8,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "source_frame_cache_hits": 4,
+            "source_frame_cache_misses": 4,
+            "source_rgba8_bytes": 132710400,
+            "source_rgba8_conversions": 4,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 3,
+            "video_encoder_frames": 4,
+            "worker_checkpoint_calls": 12
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 132722758,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 5470,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 1843200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 1533,
+            "native_codec_send": 6397,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 21,
+            "pipeline_consumer_input_wait": 278570,
+            "output_color_conversion_copy": 7433
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-h264-mixed-audio-v2",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_packet_payload_equal": false,
+        "all_encoded_bytes_equal": false
+      },
+      "summary": {
+        "before": {
+          "first_ms": 570.1239579939283,
+          "frame_stage": {
+            "first_frame_render_us": 125072,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 54493,
+            "warm_frame_render_p95_us": 54678
+          },
+          "subsequent_p50_ms": 572.2967910114676,
+          "subsequent_p95_ms": 575.3158330044243
+        },
+        "after": {
+          "first_ms": 1030.6913339882158,
+          "frame_stage": {
+            "first_frame_render_us": 119888,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 52351,
+            "warm_frame_render_p95_us": 52831
+          },
+          "subsequent_p50_ms": 531.3929169933544,
+          "subsequent_p95_ms": 544.5005000074161
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 531873792,
+          "counts": {
+            "audio_mix_blocks": 10,
+            "audio_mixed_frames": 16000,
+            "checkpoint_callbacks": 16,
+            "native_codec_receive": 18,
+            "native_codec_send": 10,
+            "native_frame_shared_hits": 4,
+            "native_rgba_to_yuv": 8,
+            "output_tile_conversions": 16,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "source_frame_cache_hits": 4,
+            "source_frame_cache_misses": 4,
+            "source_rgba8_bytes": 132710400,
+            "source_rgba8_conversions": 4,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 3,
+            "video_encoder_frames": 8,
+            "worker_checkpoint_calls": 16
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 132722758,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 5470,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 3686400
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 1764,
+            "native_codec_send": 8139,
+            "native_codec_receive": 3,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 14,
+            "pipeline_consumer_input_wait": 283399,
+            "output_color_conversion_copy": 13585
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 526843904,
+          "counts": {
+            "audio_mix_blocks": 10,
+            "audio_mixed_frames": 16000,
+            "checkpoint_callbacks": 16,
+            "native_codec_receive": 9,
+            "native_codec_send": 5,
+            "native_frame_shared_hits": 4,
+            "native_rgba_to_yuv": 4,
+            "output_direct_bytes": 3686400,
+            "output_tile_conversions": 8,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "source_frame_cache_hits": 4,
+            "source_frame_cache_misses": 4,
+            "source_rgba8_bytes": 132710400,
+            "source_rgba8_conversions": 4,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 3,
+            "video_encoder_frames": 4,
+            "worker_checkpoint_calls": 16
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 132722758,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 5470,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 1843200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 874,
+            "native_codec_send": 4672,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 12,
+            "pipeline_consumer_input_wait": 282782,
+            "output_color_conversion_copy": 7641
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-hdr-hlg-and-sdr",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 318.00441700033844,
+          "frame_stage": {
+            "first_frame_render_us": 75837,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 30821,
+            "warm_frame_render_p95_us": 31177
+          },
+          "subsequent_p50_ms": 313.52733400126453,
+          "subsequent_p95_ms": 315.7871250004973
+        },
+        "after": {
+          "first_ms": 285.47662499477156,
+          "frame_stage": {
+            "first_frame_render_us": 68747,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 25308,
+            "warm_frame_render_p95_us": 25637
+          },
+          "subsequent_p50_ms": 283.6164999898756,
+          "subsequent_p95_ms": 310.64383299963083
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 77103104,
+          "counts": {
+            "audio_mix_blocks": 8,
+            "audio_mixed_frames": 32000,
+            "checkpoint_callbacks": 14,
+            "native_codec_receive": 36,
+            "native_codec_send": 20,
+            "native_rgba_to_yuv": 16,
+            "output_tile_conversions": 32,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "video_encoder_frames": 16,
+            "worker_checkpoint_calls": 14
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "export_prepared_snapshot": 2936,
+            "export_sample_scenes": 5923,
+            "export_semantic_cache": 160,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "video_bundles": 11059200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 7715,
+            "native_codec_send": 3696,
+            "native_codec_receive": 4,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 24,
+            "pipeline_consumer_input_wait": 162663,
+            "output_color_conversion_copy": 100456
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 58982400,
+          "counts": {
+            "audio_mix_blocks": 8,
+            "audio_mixed_frames": 32000,
+            "checkpoint_callbacks": 14,
+            "native_codec_receive": 18,
+            "native_codec_send": 10,
+            "native_rgba_to_yuv": 8,
+            "output_direct_bytes": 11059200,
+            "output_tile_conversions": 16,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "video_encoder_frames": 8,
+            "worker_checkpoint_calls": 14
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "export_prepared_snapshot": 2936,
+            "export_sample_scenes": 5923,
+            "export_semantic_cache": 160,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "video_bundles": 5529600
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 3687,
+            "native_codec_send": 3534,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 15,
+            "pipeline_consumer_input_wait": 146031,
+            "output_color_conversion_copy": 84496
+          }
+        }
+      }
+    },
+    {
+      "name": "matrix-hdr-pq-and-sdr",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 331.04179200017825,
+          "frame_stage": {
+            "first_frame_render_us": 79903,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 36577,
+            "warm_frame_render_p95_us": 37067
+          },
+          "subsequent_p50_ms": 339.7607499937294,
+          "subsequent_p95_ms": 345.36208301142324
+        },
+        "after": {
+          "first_ms": 276.5612919902196,
+          "frame_stage": {
+            "first_frame_render_us": 68400,
+            "sampled_frames": 4,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 24043,
+            "warm_frame_render_p95_us": 24059
+          },
+          "subsequent_p50_ms": 284.27504099090584,
+          "subsequent_p95_ms": 285.7976250088541
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 76775424,
+          "counts": {
+            "audio_mix_blocks": 8,
+            "audio_mixed_frames": 32000,
+            "checkpoint_callbacks": 14,
+            "native_codec_receive": 36,
+            "native_codec_send": 20,
+            "native_rgba_to_yuv": 16,
+            "output_tile_conversions": 32,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "video_encoder_frames": 16,
+            "worker_checkpoint_calls": 14
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "export_prepared_snapshot": 2935,
+            "export_sample_scenes": 5923,
+            "export_semantic_cache": 160,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "video_bundles": 11059200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 7588,
+            "native_codec_send": 3575,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 18,
+            "pipeline_consumer_input_wait": 186570,
+            "output_color_conversion_copy": 123472
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 58753024,
+          "counts": {
+            "audio_mix_blocks": 8,
+            "audio_mixed_frames": 32000,
+            "checkpoint_callbacks": 14,
+            "native_codec_receive": 18,
+            "native_codec_send": 10,
+            "native_rgba_to_yuv": 8,
+            "output_direct_bytes": 11059200,
+            "output_tile_conversions": 16,
+            "rendered_frames": 4,
+            "rendered_tiles": 8,
+            "video_encoder_frames": 8,
+            "worker_checkpoint_calls": 14
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "export_prepared_snapshot": 2935,
+            "export_sample_scenes": 5923,
+            "export_semantic_cache": 160,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 2949120,
+            "video_bundles": 5529600
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 3668,
+            "native_codec_send": 3480,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 1,
+            "pipeline_submit_wait": 16,
+            "pipeline_consumer_input_wait": 139145,
+            "output_color_conversion_copy": 77909
+          }
+        }
+      }
+    },
+    {
+      "name": "sws2-1080-av1-duplicate",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 4750.386665997212,
+          "frame_stage": {
+            "first_frame_render_us": 413477,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 362911,
+            "warm_frame_render_p95_us": 371538
+          },
+          "subsequent_p50_ms": 4737.487082995358,
+          "subsequent_p95_ms": 4774.343167009647
+        },
+        "after": {
+          "first_ms": 4756.075416007661,
+          "frame_stage": {
+            "first_frame_render_us": 415411,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 362882,
+            "warm_frame_render_p95_us": 378897
+          },
+          "subsequent_p50_ms": 4755.762291999417,
+          "subsequent_p95_ms": 4793.847374996403
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 841138176,
+          "counts": {
+            "audio_mix_blocks": 12,
+            "audio_mixed_frames": 48000,
+            "checkpoint_callbacks": 26,
+            "native_codec_receive": 25,
+            "native_codec_send": 13,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 12,
+            "output_direct_bytes": 99532800,
+            "output_tile_conversions": 144,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 12,
+            "worker_checkpoint_calls": 26
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 16588800
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 24951,
+            "native_codec_send": 145384,
+            "native_codec_receive": 16,
+            "pipeline_buffer_acquire": 7,
+            "pipeline_submit_wait": 35,
+            "pipeline_consumer_input_wait": 4406525,
+            "output_color_conversion_copy": 197179
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 839991296,
+          "counts": {
+            "audio_mix_blocks": 12,
+            "audio_mixed_frames": 48000,
+            "checkpoint_callbacks": 26,
+            "native_codec_receive": 25,
+            "native_codec_send": 13,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 12,
+            "output_direct_bytes": 99532800,
+            "output_tile_conversions": 144,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 12,
+            "worker_checkpoint_calls": 26
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 16588800
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 25048,
+            "native_codec_send": 144361,
+            "native_codec_receive": 17,
+            "pipeline_buffer_acquire": 6,
+            "pipeline_submit_wait": 32,
+            "pipeline_consumer_input_wait": 4417505,
+            "output_color_conversion_copy": 197128
+          }
+        }
+      }
+    },
+    {
+      "name": "sws2-4k-dnx-mov-mxf",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": false
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1838.1927500013262,
+          "frame_stage": {
+            "first_frame_render_us": 1380868,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1853.6819169967202,
+          "subsequent_p95_ms": 1869.9550840101438
+        },
+        "after": {
+          "first_ms": 1859.889707993716,
+          "frame_stage": {
+            "first_frame_render_us": 1370864,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1839.7448330069892,
+          "subsequent_p95_ms": 1844.1617920034332
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 1306968064,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 16737,
+            "native_codec_send": 39035,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 12,
+            "pipeline_consumer_input_wait": 1369953,
+            "output_color_conversion_copy": 66198
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 1305526272,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 17091,
+            "native_codec_send": 39391,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 11,
+            "pipeline_consumer_input_wait": 1365375,
+            "output_color_conversion_copy": 66329
+          }
+        }
+      }
+    },
+    {
+      "name": "sws2-4k-single-direct",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1741.6500419931253,
+          "frame_stage": {
+            "first_frame_render_us": 1370046,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1743.2902500004275,
+          "subsequent_p95_ms": 1753.5787079978036
+        },
+        "after": {
+          "first_ms": 1734.555208007805,
+          "frame_stage": {
+            "first_frame_render_us": 1400805,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1749.3255420122296,
+          "subsequent_p95_ms": 1780.3950829984387
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 488144896,
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 16870,
+            "native_codec_send": 220028,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 10,
+            "pipeline_consumer_input_wait": 1359273,
+            "output_color_conversion_copy": 64924
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 488685568,
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 16956,
+            "native_codec_send": 221186,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 10,
+            "pipeline_consumer_input_wait": 1359131,
+            "output_color_conversion_copy": 65093
+          }
+        }
+      }
+    },
+    {
+      "name": "sws4-1080-av1-duplicate",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 4782.69987499516,
+          "frame_stage": {
+            "first_frame_render_us": 417545,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 365247,
+            "warm_frame_render_p95_us": 372963
+          },
+          "subsequent_p50_ms": 4773.749957996188,
+          "subsequent_p95_ms": 4800.230167005793
+        },
+        "after": {
+          "first_ms": 4737.837666994892,
+          "frame_stage": {
+            "first_frame_render_us": 413884,
+            "sampled_frames": 12,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders.",
+            "warm_frame_render_p50_us": 361474,
+            "warm_frame_render_p95_us": 372074
+          },
+          "subsequent_p50_ms": 4723.035167000489,
+          "subsequent_p95_ms": 4740.452790996642
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 836534272,
+          "counts": {
+            "audio_mix_blocks": 12,
+            "audio_mixed_frames": 48000,
+            "checkpoint_callbacks": 26,
+            "native_codec_receive": 25,
+            "native_codec_send": 13,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 12,
+            "output_direct_bytes": 99532800,
+            "output_tile_conversions": 144,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 12,
+            "worker_checkpoint_calls": 26
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 16588800
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 24797,
+            "native_codec_send": 144860,
+            "native_codec_receive": 18,
+            "pipeline_buffer_acquire": 7,
+            "pipeline_submit_wait": 32,
+            "pipeline_consumer_input_wait": 4439616,
+            "output_color_conversion_copy": 197745
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 849100800,
+          "counts": {
+            "audio_mix_blocks": 12,
+            "audio_mixed_frames": 48000,
+            "checkpoint_callbacks": 26,
+            "native_codec_receive": 25,
+            "native_codec_send": 13,
+            "native_frame_shared_hits": 132,
+            "native_rgba_to_yuv": 12,
+            "output_direct_bytes": 99532800,
+            "output_tile_conversions": 144,
+            "rendered_frames": 12,
+            "rendered_tiles": 144,
+            "source_frame_cache_evictions": 4,
+            "source_frame_cache_hits": 132,
+            "source_frame_cache_misses": 12,
+            "source_rgba8_bytes": 398131200,
+            "source_rgba8_conversions": 12,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 11,
+            "video_encoder_frames": 12,
+            "worker_checkpoint_calls": 26
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 32768,
+            "converted_source_cache": 265445520,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 16414,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 16588800
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 25384,
+            "native_codec_send": 145669,
+            "native_codec_receive": 17,
+            "pipeline_buffer_acquire": 7,
+            "pipeline_submit_wait": 38,
+            "pipeline_consumer_input_wait": 4379977,
+            "output_color_conversion_copy": 197353
+          }
+        }
+      }
+    },
+    {
+      "name": "sws4-4k-dnx-mov-mxf",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": false
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1878.6435420042835,
+          "frame_stage": {
+            "first_frame_render_us": 1383962,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1866.167582993512,
+          "subsequent_p95_ms": 1874.6962920122314
+        },
+        "after": {
+          "first_ms": 1857.7610420034034,
+          "frame_stage": {
+            "first_frame_render_us": 1370822,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1842.0415829896228,
+          "subsequent_p95_ms": 1862.9584160080412
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 1307361280,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 17378,
+            "native_codec_send": 39798,
+            "native_codec_receive": 0,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 12,
+            "pipeline_consumer_input_wait": 1383988,
+            "output_color_conversion_copy": 66128
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 1308311552,
+          "counts": {
+            "audio_mix_blocks": 2,
+            "audio_mixed_frames": 4000,
+            "checkpoint_callbacks": 5,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 5
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 17010,
+            "native_codec_send": 39084,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 8,
+            "pipeline_consumer_input_wait": 1372306,
+            "output_color_conversion_copy": 66380
+          }
+        }
+      }
+    },
+    {
+      "name": "sws4-4k-single-direct",
+      "pairs": 3,
+      "comparison": {
+        "all_decoded_bits_pts_layout_equal": true,
+        "all_snapshot_hashes_equal": true,
+        "all_chapters_and_packet_side_data_equal": true,
+        "all_encoded_bytes_equal": true
+      },
+      "summary": {
+        "before": {
+          "first_ms": 1743.1487090070732,
+          "frame_stage": {
+            "first_frame_render_us": 1365050,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1746.3149999966845,
+          "subsequent_p95_ms": 1762.8399160021218
+        },
+        "after": {
+          "first_ms": 1800.9812500094995,
+          "frame_stage": {
+            "first_frame_render_us": 1366333,
+            "sampled_frames": 1,
+            "note": "Same-worker host rendering including tile conversion; GPU/runtime creation excluded; first frame includes cold shaders."
+          },
+          "subsequent_p50_ms": 1733.8966249953955,
+          "subsequent_p95_ms": 1748.3621660067001
+        }
+      },
+      "modes": {
+        "before": {
+          "sampled_worker_peak_rss_p50_bytes": 487555072,
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 17397,
+            "native_codec_send": 222240,
+            "native_codec_receive": 2,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 10,
+            "pipeline_consumer_input_wait": 1365068,
+            "output_color_conversion_copy": 65780
+          }
+        },
+        "after": {
+          "sampled_worker_peak_rss_p50_bytes": 490455040,
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 39,
+            "native_rgba_to_yuv": 1,
+            "output_direct_bytes": 33177600,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 39,
+            "source_frame_cache_misses": 1,
+            "source_rgba8_bytes": 33177600,
+            "source_rgba8_conversions": 1,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 0,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 33180690,
+            "export_prepared_snapshot": 3418,
+            "export_sample_scenes": 1366,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "stage_total_p50_us": {
+            "native_rgba_to_yuv": 17740,
+            "native_codec_send": 222907,
+            "native_codec_receive": 1,
+            "pipeline_buffer_acquire": 0,
+            "pipeline_submit_wait": 9,
+            "pipeline_consumer_input_wait": 1366351,
+            "output_color_conversion_copy": 65857
+          }
+        }
+      }
+    }
+  ]
+}

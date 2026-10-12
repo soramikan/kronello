@@ -1,6 +1,6 @@
 # ADR-0152: 二組のframeでrenderとencodeを重ねる
 
-- 状態: 採用
+- 状態: 部分置換（ADR-0162: 同条件legのpacked buffer/video encoder共有）
 - 日付: 2026-10-11
 - 対象: PERF-004
 - 部分置換: ADR-0079の単一threadの逐次frame処理。音声spool/block、tile/halo/512 MiB予算、frame/sample格子、色変換、型付き失敗、staging/publication契約は維持する。

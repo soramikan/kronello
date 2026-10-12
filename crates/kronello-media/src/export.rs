@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::audio::{publish_file, stage_file};
+#[path = "export_color.rs"]
+mod color;
 #[path = "export_pipeline.rs"]
 mod pipeline;
 
@@ -1663,9 +1665,17 @@ impl MediaRuntime {
                 background: leg.background,
                 output: leg.output.clone(),
                 audio_layout: leg.snapshot.audio_layout,
+                color: if let Some(transfer) = leg.profile.hdr_transfer() {
+                    color::OutputColor::Hdr(transfer)
+                } else {
+                    color::OutputColor::Sdr {
+                        tone_map: render_hdr.is_some() && leg.profile.sdr_delivery_conversion(),
+                    }
+                },
             })
             .collect();
         let mut metadata = Vec::new();
+        let conversion_owners = pipeline::conversion_owners(&video_legs);
         let pipeline::ResultData {
             files: video_files,
             reports: mut video_reports,
@@ -1714,43 +1724,31 @@ impl MediaRuntime {
                             let _conversion = diagnostics.time("output_color_conversion_copy");
                             diagnostics.count("rendered_tiles", 1);
                             diagnostics.peak_payload("linear_tile", (output.len() as u64) * 16);
-                            for (leg, buffer) in video_legs.iter().zip(&mut bundle) {
-                                let stride = leg.stride();
-                                if stride == 0 {
+                            for (index, leg) in video_legs.iter().enumerate() {
+                                if leg.stride() == 0 || conversion_owners[index] != index {
                                     continue;
                                 }
                                 diagnostics.count("output_tile_conversions", 1);
-                                let bytes = if let Some(transfer) = leg.profile.hdr_transfer() {
-                                    hdr_rgba(&output, leg.background, transfer)
-                                } else if render_hdr.is_some()
-                                    && leg.profile.sdr_delivery_conversion()
-                                {
-                                    let mapped: Vec<_> = output
-                                        .iter()
-                                        .map(|p| {
-                                            kronello_render::hdr_to_sdr_linear([
-                                                p[0] + leg.background[0] * (1.0 - p[3]),
-                                                p[1] + leg.background[1] * (1.0 - p[3]),
-                                                p[2] + leg.background[2] * (1.0 - p[3]),
-                                                1.0,
-                                            ])
-                                        })
-                                        .collect();
-                                    bt709_rgba(&mapped, [0.0; 3])
-                                } else {
-                                    bt709_rgba(&output, leg.background)
-                                }
-                                .map_err(|e| {
-                                    kronello_render::RenderError::UnsupportedFeature(e.to_string())
+                                color::packed_into(
+                                    &output,
+                                    leg.background,
+                                    leg.color,
+                                    &mut bundle[index],
+                                    width * leg.stride(),
+                                    [x, y],
+                                    tile.pixels,
+                                )
+                                .map_err(|error| {
+                                    kronello_render::RenderError::UnsupportedFeature(
+                                        error.to_string(),
+                                    )
                                 })?;
-                                for row in 0..tile.pixels[1] as usize {
-                                    let destination =
-                                        ((y as usize + row) * width + x as usize) * stride;
-                                    let source = row * tile.pixels[0] as usize * stride;
-                                    let row_bytes = tile.pixels[0] as usize * stride;
-                                    buffer[destination..destination + row_bytes]
-                                        .copy_from_slice(&bytes[source..source + row_bytes]);
-                                }
+                                diagnostics.count(
+                                    "output_direct_bytes",
+                                    tile.pixels[0] as u64
+                                        * tile.pixels[1] as u64
+                                        * leg.stride() as u64,
+                                );
                             }
                             Ok(())
                         },
@@ -2003,6 +2001,7 @@ fn export_chapters(
     }
     Ok(chapters)
 }
+#[cfg(test)]
 fn hdr_rgba(
     pixels: &[[f32; 4]],
     background: [f32; 3],
@@ -2027,6 +2026,7 @@ fn hdr_rgba(
     }
     Ok(bytes)
 }
+#[cfg(test)]
 fn bt709_rgba(pixels: &[[f32; 4]], background: [f32; 3]) -> Result<Vec<u8>, MediaError> {
     let mut rgba = Vec::with_capacity(pixels.len() * 4);
     for pixel in pixels {

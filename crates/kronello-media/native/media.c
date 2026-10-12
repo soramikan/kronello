@@ -522,6 +522,30 @@ void km_encoder_close(Encoder *e) {
     if(e->format) { if(e->format->pb)k->avio_closep(&e->format->pb); k->avformat_free_context(e->format); }
     free(e);
 }
+#ifndef KRONELLO_ENCODER_SWS_THREADS
+#define KRONELLO_ENCODER_SWS_THREADS 1
+#endif
+#if KRONELLO_ENCODER_SWS_THREADS != 1 && KRONELLO_ENCODER_SWS_THREADS != 2 && KRONELLO_ENCODER_SWS_THREADS != 4
+#error "Encoder conversion threads must be 1, 2 or 4"
+#endif
+/* Closed compile-time comparison policy; no request/FFmpeg argument injection.
+ * Codec threads remain ProRes=4, DNx=2 and SVT lp=1. */
+static struct SwsContext *encoder_converter(Km *k,int width,int height,int src_format,int dst_format) {
+    struct SwsContext *sws=k->sws_alloc_context();
+    if(!sws){fail(k,AVERROR(ENOMEM),"encoder converter allocation");return NULL;}
+    const struct {const char *name;int value;} options[]={
+        {"srcw",width},{"srch",height},{"src_format",src_format},
+        {"dstw",width},{"dsth",height},{"dst_format",dst_format},
+        {"sws_flags",SWS_BILINEAR},{"threads",KRONELLO_ENCODER_SWS_THREADS}
+    };
+    for(size_t i=0;i<sizeof(options)/sizeof(options[0]);++i){
+        int ret=k->av_opt_set_int(sws,options[i].name,options[i].value,0);
+        if(ret<0){k->sws_freeContext(sws);fail(k,ret,"encoder converter option");return NULL;}
+    }
+    int ret=k->sws_init_context(sws,NULL,NULL);
+    if(ret<0){k->sws_freeContext(sws);fail(k,ret,"encoder converter initialization");return NULL;}
+    return sws;
+}
 Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int width, int height, int num, int den, int hdr) {
     Encoder *e=calloc(1,sizeof(*e)); if(!e) {fail(k,AVERROR(ENOMEM),"encoder allocation");return NULL;} e->k=k;
     const AVCodec *codec=k->avcodec_find_encoder_by_name(name);
@@ -566,8 +590,8 @@ Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int wi
     e->frame->format=e->codec->pix_fmt;e->frame->width=width;e->frame->height=height;
     e->frame->color_primaries=e->codec->color_primaries;e->frame->color_trc=e->codec->color_trc;e->frame->colorspace=e->codec->colorspace;e->frame->color_range=e->codec->color_range;
     ret=k->av_frame_get_buffer(e->frame,32);if(ret<0){fail(k,ret,"frame buffer");goto failed;}
-    e->sws=k->sws_getContext(width,height,hdr?AV_PIX_FMT_RGBA64LE:AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
-    if(!e->sws){fail(k,AVERROR(ENOMEM),"pixel conversion");goto failed;}
+    e->sws=encoder_converter(k,width,height,hdr?AV_PIX_FMT_RGBA64LE:AV_PIX_FMT_RGBA,e->codec->pix_fmt);
+    if(!e->sws)goto failed;
     const int *coeff=k->sws_getCoefficients(hdr?SWS_CS_BT2020:SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(e->sws,coeff,1,coeff,0,0,1<<16,1<<16);
     if(ret<0){fail(k,ret,"BT.709 pixel conversion");goto failed;}
@@ -622,8 +646,8 @@ Encoder *km_encoder_open_dnx(Km *k,const char *path,int width,int height,int num
     e->frame->format=e->codec->pix_fmt;e->frame->width=width;e->frame->height=height;
     e->frame->color_primaries=e->codec->color_primaries;e->frame->color_trc=e->codec->color_trc;e->frame->colorspace=e->codec->colorspace;e->frame->color_range=e->codec->color_range;
     ret=k->av_frame_get_buffer(e->frame,32);if(ret<0){fail(k,ret,"frame buffer");goto failed;}
-    e->sws=k->sws_getContext(width,height,AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
-    if(!e->sws){fail(k,AVERROR(ENOMEM),"pixel conversion");goto failed;}
+    e->sws=encoder_converter(k,width,height,AV_PIX_FMT_RGBA,e->codec->pix_fmt);
+    if(!e->sws)goto failed;
     const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(e->sws,coeff,1,coeff,0,0,1<<16,1<<16);
     if(ret<0){fail(k,ret,"BT.709 pixel conversion");goto failed;}
