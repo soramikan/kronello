@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 2 | 1 | 22 | 0 | 25 |
+| M10 | 1 | 1 | 23 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1322,7 +1322,7 @@
 
 ### PERF-013 有界metadata・receiptとmux確定工程
 
-- 優先度: P1 / 領域: performance / 状態: in_progress
+- 優先度: P1 / 領域: performance / 状態: done
 - 依存: PERF-011, PERF-012
 - 受け入れ条件:
   - 版付き共通headerと固定上限frame metadata chunk、小さいroot receiptのhash/frame range/count/identityをwriter/reader/結果API/復旧へ実装する。statusはsummary、詳細はページ単位で読む
@@ -1331,7 +1331,7 @@
 
 ### PERF-014 GPU色変換・encoder surface・直接mux試作
 
-- 優先度: P2 / 領域: performance / 状態: planned
+- 優先度: P2 / 領域: performance / 状態: in_progress
 - 依存: PERF-013
 - 受け入れ条件:
   - 先行改善後の工程実測に基づき対象backend/formatを絞ってGPU出力→encoder入力surfaceとpacket直接muxを試作・比較する

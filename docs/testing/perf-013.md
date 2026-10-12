@@ -1,6 +1,6 @@
 # PERF-013: 長尺metadata・receipt・mux確定工程
 
-状態: `in_progress`。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF・receiptと[ADR-0166](../adr/0166-bounded-sequence-metadata.md)の画像連番、およびprobe再利用・mux取消を実装した。10,000frame画像連番比較は完了した。以下の初期記録と追加検証を区別し、最終workspace testの完了を待つ。
+状態: `done`。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF・receiptと[ADR-0166](../adr/0166-bounded-sequence-metadata.md)の画像連番、およびprobe再利用・mux取消を実装した。10,000frame画像連番比較は完了した。以下の初期記録と追加検証を区別し、末尾の最終受け入れでworkspace成功と全条件の確認を記録した。
 
 ## 変更前の実worker基準
 
@@ -134,3 +134,7 @@ python3 scripts/perf_export_worker.py \
 この表は条件と根拠の対応であり、最後の必須gateがterminal successになるまでは受け入れ状態を`in_progress`に維持する。PERF-014のGPU/encoder surfaceと直接packet muxは別の未実施項目である。
 
 wire修正後のworkspace実行は、FFI外部出力のnative bundle検出が約10〜14.5秒かかるため2件timeoutでexit101になった。native stackでCLI/build directoryのFoundation走査を確認し、deadlineを変更せず明示app配置からframework候補を生成する実装へ修正した。[原因・timing・修正記録](syphon-cli-bundle-probe.md)を参照する。PERF-013のrender/manifest成果物の比較と、この必須gateで見つかった遅延の修正を区別する。
+
+## 最終受け入れ
+
+修正後のfmt・全workspace/all-targets Clippy・全workspace test（`--locked --no-fail-fast`）が成功した。testは201 suites・1379 passed・0 failed・50 ignored、`target/perf-013-bundle-fixed-workspace-tests.log`、exit0、SHA-256 `fedcc38fc075b4057ae1cac8f1da2cc7dfdc381c05e1f29c1fca8c26fc59c257`。ignored全機能の保証ではなく、PERF-013固有の全metadata/packet/画素比較、破損、旧形式、取消/kill/reconciliation、page/prune/RSSは本文の明示実行を根拠にする。途中の失敗ログをこの成功へ置換しない。本文の「進行中/残件」は各初期時点の記録であり、この最終gateをもってPERF-013を受け入れる。PERF-014は未完了であり、全依頼を完了した意味ではない。

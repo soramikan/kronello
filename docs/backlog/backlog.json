@@ -2661,7 +2661,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "有界metadata・receiptとmux確定工程",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-011",
         "PERF-012"
@@ -2678,7 +2678,7 @@
       "priority": "P2",
       "area": "performance",
       "title": "GPU色変換・encoder surface・直接mux試作",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-013"
       ],

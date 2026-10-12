@@ -1,6 +1,6 @@
 # ADR-0166: 画像連番のmetadataと画素参照を有界manifestへ保存する
 
-- 状態: 採用（PERF-013受け入れ進行中）
+- 状態: 採用（PERF-013受け入れ済み）
 - 日付: 2026-10-13
 - 対象: PERF-013
 - 部分置換: ADR-0165のimage sequence除外とADR-0050の画像連番全frame結果格納。短いversion1、既存receipt読み込み、画素形式・時刻・hash・固定snapshot・lease/cancel/final fence・NOREPLACEは維持する。
