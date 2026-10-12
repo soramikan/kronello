@@ -2595,7 +2595,7 @@
       "priority": "P0",
       "area": "performance",
       "title": "worker進捗保存と取消・heartbeatの分離",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-006"
       ],
@@ -2611,7 +2611,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "色変換直接書込みと複数出力共有",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-007",
         "PERF-008",

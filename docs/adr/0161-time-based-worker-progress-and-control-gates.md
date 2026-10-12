@@ -1,6 +1,6 @@
 # ADR-0161: worker制御確認と時間駆動の進捗保存
 
-状態: 採用（PERF-009受け入れ進行中）
+状態: 採用（PERF-009受け入れ済み）
 日付: 2026-10-12
 部分置換: ADR-0050の固定workerのcheckpointごとの進捗/heartbeat書込み。専用heartbeat、FIFO、固定入力、no-clobber/attemptを伴う最終公開transactionと復旧契約を維持する。
 

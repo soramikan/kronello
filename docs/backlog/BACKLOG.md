@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 6 | 1 | 18 | 0 | 25 |
+| M10 | 5 | 1 | 19 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1286,7 +1286,7 @@
 
 ### PERF-009 worker進捗保存と取消・heartbeatの分離
 
-- 優先度: P0 / 領域: performance / 状態: in_progress
+- 優先度: P0 / 領域: performance / 状態: done
 - 依存: PERF-006
 - 受け入れ条件:
   - 取消/lease確認と表示進捗永続化を分離し100〜250msの保存間隔と同値抑制を比較する。専用heartbeatと最終確定前fenceを維持する
@@ -1295,7 +1295,7 @@
 
 ### PERF-010 色変換直接書込みと複数出力共有
 
-- 優先度: P1 / 領域: performance / 状態: planned
+- 優先度: P1 / 領域: performance / 状態: in_progress
 - 依存: PERF-007, PERF-008, PERF-009
 - 受け入れ条件:
   - 変換を既存frame bufferへstride/offset付きで直接書き、一時Vec・行copy・HDR→SDR中間配列を除く。transfer/alpha/範囲検査/丸め順とf32丸め境界を維持し変換bytes一致を検証する

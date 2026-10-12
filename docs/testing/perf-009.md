@@ -1,6 +1,6 @@
 # PERF-009: 固定workerの進捗と制御確認
 
-2026-10-12着手、`in_progress`。[ADR-0161](../adr/0161-time-based-worker-progress-and-control-gates.md)に従い、取消/attempt/leaseのread-only確認と、時間駆動の進捗persistを分離した。既定は確認50ms/進捗200ms。専用heartbeatと最終公開のtransaction fenceは維持する。
+2026-10-12受け入れ済み、`done`。[ADR-0161](../adr/0161-time-based-worker-progress-and-control-gates.md)に従い、取消/attempt/leaseのread-only確認と、時間駆動の進捗persistを分離した。既定は確認50ms/進捗200ms。専用heartbeatと最終公開のtransaction fenceは維持する。
 
 ## 実workerの固定A/B
 
@@ -29,3 +29,7 @@
 - 強制終了: PIDと正確な--jobを確認した専用workerだけにSIGKILL。実停止約19〜24ms、heartbeat期限でinterrupted、固定入力のattempt1でsucceeded。4件の再開出力は基準の全decoded bits/PTS/layout/snapshot tags/encoded bytesと一致した。
 
 新read-only gateのWAL writerとの共存、read後/write前の取消と同PID新attempt、同値/減少write省略、1万callback→6 commit、heartbeat不変のunitは成功。実プロセスtestsのFIFO・取消・lease・kill・heartbeat競合と固定再開も成功した。最終Clippyは成功。全workspace testと受け入れ条件の最終照合が残るためdoneにはしていない。依頼全体のPERF-010〜014も未完了。
+
+## 最終受け入れ
+
+全workspaceは終了コード0、1353 passed、0 failed、47 ignored、200 suites（`/private/tmp/kronello-perf009-workspace.log`）。Clippy/fmt/schema・Swift/backlog検証、実プロセス33件、固定A/B108試行、取消/lease/kill/固定再開の8試行を確認し、PERF-009をdoneとした。native描画中の約12秒の取消停止は既存制約として記録し、短い制御間隔の保証と混同しない。PERF-010〜014は継続する。
