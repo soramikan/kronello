@@ -118,3 +118,17 @@ python3 scripts/perf_export_worker.py \
 ```
 
 1,000frame版はcaseを複製し、`submit.render.range.end`を`10/1`、`expected_frames`を1000へ変更したもの。MOV版はbeforeを`target/perf-013/binaries/manifest-v1/kronello`、caseを上記MOV case、outputを別の未使用directoryへ変える。`job.frames`のkernel RSSは成功済みafter試行のstate rootで、`/usr/bin/time -l`から同じbinaryのCPU CLIへ`{operation: job.frames, job, offset, limit: 64}`を渡す。offsetは0および`total_frames - 64`。responseのcount/total/file refsを検査し、stderrのmaximum resident set size（Darwin byte単位）を記録する。
+
+## 受け入れ条件と証拠の対応
+
+| 条件 | 実装・実行証拠 | 判定範囲 |
+|---|---|---|
+| 共通header・固定上限chunk・小さいroot receipt | `frame_manifest.rs`の8MiB header/64件・4MiB chunk、`artifact_index.rs`の9root/32KiB entry、10,000frame GIF/連番完走とreceipt/chunk保持計数 | 新writerは全frame/全artifactのVecを保持しない。旧version1の全量読込は互換例外 |
+| status summaryと詳細page | 同じregistryの`job.frames`、CLI境界/prune試験、1,000/10,000frameの先頭・末尾64件Queryのkernel RSS | pageは64件/16MiB、header/index全体と必要chunk payloadを認証。未参照payloadの検査は全体verifyで行う |
+| 元metadata・画素・有理数時刻の復元 | movie/GIFと画像連番の交互A/B、全frame semantic digest、全numeric/display payload hash、negative/NTSC/overflow grid試験 | execution observationだけを除外し、数値・time・snapshot/lock/意味版を比較。movieでは全packet/PTS/layoutも独立検証 |
+| chunk欠落・破損・順序違い | reader単体の完全再hashした順序違いを含む3mode、CLIのroot破損、rename後の新movie/sequence chunk破損 | writerが未完了directoryを回収し、page/recoveryが不正artifactを拒否 |
+| 旧receipt・旧連番・途中公開の復旧 | jobs recovery9件、CLI旧3frame/新65frame各movie/sequenceのrename/DB境界4case、partial bundle/extra file/tamper拒否 | fixed snapshot/attempt/lease/所有stage/NOREPLACEを保持。cancelとkillからの新chunk復旧も実processで確認 |
+| probe再利用・mux取消・最終検証 | 全delivery9件、packet境界callback取消とprivate stage全回収、実workerのprobe再利用2件/callback5回、全packet/time/hash一致 | Rust重複probeを除きnative demux/stream-infoと最終container検査を維持。短いMOVの全体速度改善は未確認 |
+| wire/schemaと必須workspace gate | API全76operationのrequest/result schema・strict Response往復12件成功、生成Swift整合、修正後全target Clippy成功 | `target/perf-013-final-workspace-tests.log`の実行は継続中。workspace全体の成功はまだ主張しない |
+
+この表は条件と根拠の対応であり、最後の必須gateがterminal successになるまでは受け入れ状態を`in_progress`に維持する。PERF-014のGPU/encoder surfaceと直接packet muxは別の未実施項目である。
