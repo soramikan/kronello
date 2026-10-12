@@ -1,6 +1,6 @@
 # PERF-013: 長尺metadata・receipt・mux確定工程
 
-状態: `in_progress`。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF・receiptと[ADR-0166](../adr/0166-bounded-sequence-metadata.md)の画像連番、およびprobe再利用・mux取消を実装した。以下の初期記録と追加検証を区別し、10,000frame画像連番比較と最終workspace testの完了を待つ。
+状態: `in_progress`。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF・receiptと[ADR-0166](../adr/0166-bounded-sequence-metadata.md)の画像連番、およびprobe再利用・mux取消を実装した。10,000frame画像連番比較は完了した。以下の初期記録と追加検証を区別し、最終workspace testの完了を待つ。
 
 ## 変更前の実worker基準
 
@@ -80,6 +80,37 @@ muxはprivate stageの既取得probe2件を受け渡し、Rust側の再probeを�
 
 [実worker mux比較](perf-013-mux.json)はbefore=`3d0a5d95…`、after=`65129ba1…`、64×64・48frames ProRes/PCM24 MOV、CPU、交互3pairsで、全decoded bits/PTS/layout/priming/packet payload/file bytes/snapshot metadataが一致した。afterの全試行はprobe再利用2件・native取消callback5回を記録した。後続wall p50は247.4→273.9ms、p95は268.1→287.5msで、この短いfixtureでは全体速度改善を確認していない。重複検査の削減と取消境界の実装を証明する記録であり、直接muxの採用根拠へ読み替えない。チャプターの非空往復はdelivery試験で別に確認した。
 
-10,000frame画像連番比較と最終workspace testは実行中。workspace/all-target Clippyとfmtは成功した。受け入れはまだ`in_progress`で、PERF-014の試作も残る。
+最終workspace testは実行中。workspace/all-target Clippyとfmtは成功した。受け入れはまだ`in_progress`で、PERF-014の試作も残る。
+
+## 10,000frame画像連番の完走
+
+[交互3pairsの全記録](perf-013-sequence-10000.json)は1,000frame比較と同じ固定before/after binary・document・region・rateでrangeだけを10倍にした。6workerすべて成功し、全10,000件のsemantic metadataと20,000個のnumeric/display payloadの名前・bytes・hashが各A/Bで一致した。frame metadataはmanifestページから順に復元し、comparisonのmovie packet欄はnullである。
+
+| 観測 | inline before | manifest after |
+|---|---:|---:|
+| 初回worker wall | 163,003.1ms | 83,043.3ms |
+| 後続worker p50 | 151,304.8ms | 97,567.7ms |
+| 後続worker p95 | 153,645.7ms | 101,597.6ms |
+| sampled RSS peak（各3試行） | 662.7〜669.3MB | 23.4〜24.4MB |
+| root receipt | 30,847,943bytes | 1,279bytes |
+| 外部artifact index | root内の全一覧 | 2,893,652bytes（逐次writer/reader） |
+| metadata chunk最大serialized保持 | 全10,000frame Vec | 27,024bytes |
+
+1,000frameのafter RSSは23.7〜24.2MB、receiptは1,271bytesだった。10倍のframe数でもafter保持量は増大せず、共通headerと一chunk/一index entryの実装上限、別Queryのkernel maximum RSS、全frame復元と併せて受け入れを判断する。indexのdisk容量・全file hash処理時間はfile数に比例するが、index全量をroot receiptやmemoryへhydrateしない。今回も全workspace検証と並行した静穏でないhostで、SQLite依存差と個別frame JSON削減を含む。GPU/実素材性能の一般的な改善率とは扱わない。
 
 [ページQueryの別プロセス計測](perf-013-query-memory.json)は成功済み1,000/10,000frameジョブの先頭/末尾から各64件を取得した。Darwin `/usr/bin/time -l` のkernel maximum RSSは15,777,792〜15,859,712bytes、応答は約171KBで、frame総数の10倍化に比例しなかった。chunk/header/indexを逐次読む実装上限と併せて評価する。これは測定fixtureの4プロセスであり、全作品のRSS上限を保証せず、workerの100ms sampled peakとも区別する。
+
+## 再実行
+
+[固定10,000frame連番case](fixtures/perf-013-sequence.case.json)と[固定MOV case](fixtures/perf-013-mux.case.json)を保存した。documentは既存の固定UUIDを使い、連番caseのunused source locatorはhashに含むデータとして維持する。clipを持たないため、そのlocatorをfetch/デコードしない。小さいregionや空sceneでmetadata経路を測る条件を変えない。before/after binaryのSHA-256を上記記録と照合してから、未使用output directoryで次を実行する。
+
+```sh
+python3 scripts/perf_export_worker.py \
+  --before target/perf-012/binaries/fixed/kronello \
+  --after target/perf-013/binaries/sequence-mux-v2/kronello \
+  --case docs/testing/fixtures/perf-013-sequence.case.json \
+  --output target/perf-013/sequence-rerun \
+  --backend cpu-reference --pairs 3 --disable-raster-cache
+```
+
+1,000frame版はcaseを複製し、`submit.render.range.end`を`10/1`、`expected_frames`を1000へ変更したもの。MOV版はbeforeを`target/perf-013/binaries/manifest-v1/kronello`、caseを上記MOV case、outputを別の未使用directoryへ変える。`job.frames`のkernel RSSは成功済みafter試行のstate rootで、`/usr/bin/time -l`から同じbinaryのCPU CLIへ`{operation: job.frames, job, offset, limit: 64}`を渡す。offsetは0および`total_frames - 64`。responseのcount/total/file refsを検査し、stderrのmaximum resident set size（Darwin byte単位）を記録する。
