@@ -94,7 +94,7 @@
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 部分置換（0151 / 0155） | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
-| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算 / 0148: 音声単独metadata / 0152: 二組pipeline） | 2026-10-06 |
+| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算 / 0148: 音声単独metadata / 0152: 二組pipeline / 0163: 音声共有） | 2026-10-06 |
 | [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
 | [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 部分置換（ADR-0156） | 2026-10-06 |
 | [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
@@ -192,6 +192,7 @@
 
 | [0161](0161-time-based-worker-progress-and-control-gates.md) | worker制御確認と時間駆動の進捗保存 | 採用（PERF-009受け入れ済み） | 2026-10-12 |
 | [0162](0162-direct-color-and-shared-video-delivery.md) | 直接色変換と同条件の動画delivery共有 | 採用（PERF-010受け入れ済み） | 2026-10-12 |
+| [0163](0163-shared-export-audio-and-verified-spools.md) | 書き出し音声mix共有と検証済みspoolの任意再利用 | 採用（PERF-011受け入れ進行中） | 2026-10-12 |
 
 ## 追加と変更の規則
 

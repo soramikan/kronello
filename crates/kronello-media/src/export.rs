@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::audio::{publish_file, stage_file};
+#[path = "export_audio.rs"]
+mod audio_pipeline;
 #[path = "export_color.rs"]
 mod color;
 #[path = "export_pipeline.rs"]
@@ -1543,7 +1545,6 @@ impl MediaRuntime {
                         })
                         .ok_or_else(|| MediaError::AssetMissing(clip.asset.to_string()))?;
                     let _decode = diagnostics.time("audio_decode_spool");
-                    diagnostics.count("audio_source_decodes", 1);
                     sources.decode(
                         self,
                         asset,
@@ -1555,100 +1556,22 @@ impl MediaRuntime {
                 }
             }
         }
-        // Audio pass: one encoder per audio leg. Movie legs write an
-        // intermediate inside the stage dir; elementary MP3/FLAC legs encode
-        // straight into their staged publish artifact.
-        let mut audio_reports: Vec<Option<AudioEncodeReport>> = Vec::with_capacity(legs.len());
-        let mut audio_files: Vec<Option<LegStage>> = Vec::with_capacity(legs.len());
-        for (index, leg) in legs.iter().enumerate() {
-            let Some(kind) = leg.profile.audio_kind() else {
-                audio_reports.push(None);
-                audio_files.push(None);
-                continue;
-            };
-            let file = if leg.profile.shape() == DeliveryShape::AudioOnly {
-                LegStage::Publish(stage_file(&leg.output)?)
-            } else {
-                LegStage::Intermediate(
-                    stage
-                        .path()
-                        .join(format!("audio_{index}.{}", kind.intermediate_suffix())),
-                )
-            };
-            // ADR-0124: the snapshot declares the single output layout; the
-            // bus converts sources deterministically and never folds down.
-            let layout = leg.snapshot.audio_layout;
-            let audio_prepare = diagnostics.time("audio_plan_encoder_open");
-            let mut encoder =
-                crate::ffi::NativeAudioEncoder::open(&self.native, file.path(), kind, layout)?;
-            let plan = if leg.snapshot.audio == AudioSourceMode::Document {
-                Some(document_plan(
-                    &leg.snapshot.render,
-                    leg.snapshot.schema_version,
-                )?)
-            } else {
-                None
-            };
-            let mut clipped_samples = 0_usize;
-            // Sequential encoder blocks resume stateful DSP/WSOLA chains
-            // instead of replaying each placement from its start; output is
-            // bit-identical to the stateless evaluator (ADR-0117).
-            let mut session = plan.as_ref().map(|plan| plan.playback_session());
-            drop(audio_prepare);
-            let mut start = samples.start;
-            while start < samples.end {
-                checkpoint(0)?;
-                let end = samples.end.min(
-                    start
-                        .checked_add(encoder.block as i64)
-                        .ok_or_else(|| MediaError::InvalidInput("audio batch overflow".into()))?,
-                );
-                let range = TimeRange::new(
-                    SAMPLE_RATE.sample_to_time(start)?,
-                    SAMPLE_RATE.sample_to_time(end)?,
-                )?;
-                let mix = diagnostics.time("audio_mix");
-                let bus = match (&plan, session.as_mut()) {
-                    (Some(plan), Some(session)) => {
-                        plan.mix_channels_streaming(&sources, range, layout, session)?
-                    }
-                    (Some(plan), None) => plan.mix_channels(&sources, range, layout)?,
-                    (None, _) => {
-                        kronello_audio::mix_channels(&leg.snapshot.clips, &sources, range, layout)?
-                    }
-                };
-                drop(mix);
-                let quantize = diagnostics.time("audio_quantize");
-                let quantized = bus.quantize_pcm24(request.clipping)?;
-                diagnostics.peak_payload(
-                    "audio_quantized_block",
-                    (quantized.samples.len() as u64) * 4,
-                );
-                drop(quantize);
-                diagnostics.count("audio_mix_blocks", 1);
-                diagnostics.count("audio_mixed_frames", (end - start) as u64);
-                clipped_samples = clipped_samples
-                    .checked_add(quantized.clipped_samples)
-                    .ok_or_else(|| MediaError::InvalidInput("clipping count overflow".into()))?;
-                let encode = diagnostics.time("audio_encode");
-                encoder.frame(&quantized.samples)?;
-                drop(encode);
-                start = end;
-            }
-            let finish = diagnostics.time("audio_flush");
-            encoder.finish()?;
-            drop(finish);
-            drop(encoder);
-            audio_reports.push(Some(AudioEncodeReport {
-                codec: kind.codec_name().into(),
-                sample_rate: 48_000,
-                channels: layout.channels() as u32,
-                frames: usize::try_from(samples.end - samples.start)
-                    .map_err(|_| MediaError::InvalidInput("audio count overflow".into()))?,
-                clipped_samples,
-            }));
-            audio_files.push(Some(file));
-        }
+        let audio_pipeline::ResultData {
+            reports: mut audio_reports,
+            files: mut audio_files,
+        } = audio_pipeline::run(
+            audio_pipeline::Config {
+                runtime: self,
+                legs: &legs,
+                render_hash: &render_hash,
+                samples: samples.clone(),
+                stage: stage.path(),
+                clipping: request.clipping,
+                diagnostics: diagnostics.clone(),
+            },
+            &sources,
+            checkpoint,
+        )?;
         let audio_spool_write_bytes = sources.decoded_bytes;
         let audio_window_read_bytes = sources.read_bytes();
         drop(sources);

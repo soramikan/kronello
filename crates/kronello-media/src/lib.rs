@@ -10,6 +10,7 @@ mod rawffi;
 mod render;
 pub use render::*;
 mod source_cache;
+mod spool_cache;
 pub use source_cache::{SourceFrameCacheLimits, SourceFrameCacheStats};
 mod assets;
 mod audio;
@@ -254,6 +255,7 @@ pub struct MediaRuntime {
     native: std::rc::Rc<ffi::NativeRuntime>,
     capabilities: MediaCapabilities,
     video_pipeline_mode: VideoPipelineMode,
+    audio_spools: Option<spool_cache::SpoolCache>,
     /// Canonical paths whose full content-hash verification succeeded at the
     /// recorded stat fingerprint and expected content hash. Both must match to
     /// reuse verification; any metadata-visible rewrite or expected hash change
@@ -287,15 +289,33 @@ impl MediaRuntime {
             .map_err(|e| MediaError::FfmpegUnavailable(e.to_string()))?;
         let native = std::rc::Rc::new(ffi::NativeRuntime::open(&path)?);
         let capabilities = native.capabilities(path, substituted);
+        let audio_spools = std::env::var_os("KRONELLO_AUDIO_SPOOL_CACHE_ROOT")
+            .map(|root| {
+                spool_cache::SpoolCache::new(PathBuf::from(root), 2 * 1024 * 1024 * 1024, 8)
+            })
+            .transpose()?;
         Ok(Self {
             native,
             capabilities,
             video_pipeline_mode: VideoPipelineMode::TwoFrames,
+            audio_spools,
             verified: std::sync::Arc::default(),
         })
     }
     pub fn capabilities(&self) -> &MediaCapabilities {
         &self.capabilities
+    }
+    /// Optional execution-owned decoded audio cache. It never alters source
+    /// locks, authored state, clipping or sample clocks. Zero budgets refuse
+    /// configuration; cache contention falls back to a private spool.
+    pub fn with_audio_spool_cache(
+        mut self,
+        root: PathBuf,
+        bytes: u64,
+        entries: usize,
+    ) -> Result<Self, MediaError> {
+        self.audio_spools = Some(spool_cache::SpoolCache::new(root, bytes, entries)?);
+        Ok(self)
     }
     /// Execution policy for controlled serial/overlap comparisons. It changes
     /// no authored state, codec, timestamps or publication policy.

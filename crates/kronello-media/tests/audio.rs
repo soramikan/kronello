@@ -97,6 +97,104 @@ fn request(path: &Path, rate: FrameRate) -> AvExportRequest {
         outputs: Vec::new(),
     }
 }
+
+#[test]
+fn shared_audio_preserves_clipping_and_native_blocks_against_independent_exports() {
+    let runtime = MediaRuntime::load().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let wave = dir.path().join("shared.wav");
+    write_wave(&wave, 48000, 2, 48000);
+    let asset = asset(&wave);
+    let clips = vec![clip(
+        &asset,
+        TimeRange::new(Time::ZERO, t(1, 1)).unwrap(),
+        4.0,
+    )];
+    let (project, composition) = project(asset);
+    let render = RenderSnapshot::new(&project, composition, 0, Default::default()).unwrap();
+    let snapshots = [MovieProfile::FlacV1, MovieProfile::Mp3V1].map(|profile| {
+        AvExportSnapshot::with_movie_profile(
+            &render,
+            AudioSourceMode::Explicit,
+            clips.clone(),
+            profile,
+        )
+        .unwrap()
+    });
+    let mut separate = Vec::new();
+    for (index, snapshot) in snapshots.iter().enumerate() {
+        let path = dir.path().join(format!(
+            "separate-{index}.{}",
+            snapshot.movie_profile().container()
+        ));
+        let mut request = request(&path, FrameRate::new(24, 1).unwrap());
+        request.clipping = ClippingPolicy::Saturate;
+        separate.push(
+            runtime
+                .export_delivery_with_checkpoint(
+                    &[snapshot],
+                    &dir.path().join("absent.kronello"),
+                    &[],
+                    &CpuReferenceBackend,
+                    &request,
+                    &mut |_| Ok(()),
+                )
+                .unwrap(),
+        );
+    }
+    let first = dir.path().join("shared.flac");
+    let second = dir.path().join("shared.mp3");
+    let mut request = request(&first, FrameRate::new(24, 1).unwrap());
+    request.clipping = ClippingPolicy::Saturate;
+    request.outputs = vec![DeliveryOutput {
+        output: second.clone(),
+        profile: MovieProfile::Mp3V1,
+        background: [0.0; 3],
+        chapters: ChapterPolicy::Omit,
+    }];
+    let diagnostics = ExportDiagnosticsCollector::enabled();
+    let _scope = diagnostics.activate();
+    let shared = runtime
+        .export_delivery_with_checkpoint(
+            &[&snapshots[0], &snapshots[1]],
+            &dir.path().join("absent.kronello"),
+            &[],
+            &CpuReferenceBackend,
+            &request,
+            &mut |_| Ok(()),
+        )
+        .unwrap();
+    let counts = diagnostics.snapshot().unwrap().counts;
+    assert_eq!(counts["audio_mix_groups"], 1);
+    assert_eq!(counts["audio_mixed_frames"], 6000);
+    for (index, output) in [first, second].iter().enumerate() {
+        let expected = separate[index].outputs[0].audio.as_ref().unwrap();
+        let actual = shared.outputs[index].audio.as_ref().unwrap();
+        assert!(actual.clipped_samples > 0);
+        assert_eq!(actual, expected);
+        assert_eq!(
+            std::fs::read(output).unwrap(),
+            std::fs::read(&separate[index].outputs[0].output).unwrap()
+        );
+    }
+    let first = dir.path().join("reject.flac");
+    let second = dir.path().join("reject.mp3");
+    request.output = first.clone();
+    request.outputs[0].output = second.clone();
+    request.clipping = ClippingPolicy::Reject;
+    let error = runtime
+        .export_delivery_with_checkpoint(
+            &[&snapshots[0], &snapshots[1]],
+            &dir.path().join("absent.kronello"),
+            &[],
+            &CpuReferenceBackend,
+            &request,
+            &mut |_| Ok(()),
+        )
+        .unwrap_err();
+    assert_eq!(error.code(), "AUDIO_CLIPPING");
+    assert!(!first.exists() && !second.exists());
+}
 #[test]
 fn bounded_decode_rejects_before_exceeding_remaining_source_budget() {
     let dir = tempfile::tempdir().unwrap();

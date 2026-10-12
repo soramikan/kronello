@@ -132,7 +132,7 @@ def semantic_streams(oracle):
     return result
 
 
-def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None):
+def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None, audio_spool_cache=None):
     for source in case.get("sources", []):
         if digest(source["path"]) != source["sha256"]:
             raise RuntimeError(f"fixture hash mismatch: {source['path']}")
@@ -147,6 +147,9 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
         if key.startswith("KRONELLO_TEST_") or key.startswith("KRONELLO_JOB_"):
             env.pop(key)
     env.pop("KRONELLO_PROGRESS_INTERVAL_MS", None)
+    env.pop("KRONELLO_AUDIO_SPOOL_CACHE_ROOT", None)
+    if audio_spool_cache is not None:
+        env['KRONELLO_AUDIO_SPOOL_CACHE_ROOT'] = str(audio_spool_cache.resolve())
     if progress_ms is not None:
         env["KRONELLO_PROGRESS_INTERVAL_MS"] = str(progress_ms)
     request = json.loads(json.dumps(case["submit"]))
@@ -265,6 +268,8 @@ def main():
     parser.add_argument("--after-diagnostics", choices=["enabled", "disabled"], default="enabled")
     parser.add_argument("--before-progress-ms", type=int, choices=[100, 200, 250])
     parser.add_argument("--after-progress-ms", type=int, choices=[100, 200, 250])
+    parser.add_argument('--before-audio-spool-cache', type=Path)
+    parser.add_argument('--after-audio-spool-cache', type=Path)
     parser.add_argument("--ffmpeg", default="ffmpeg")
     parser.add_argument("--ffprobe", default="ffprobe")
     args = parser.parse_args()
@@ -290,6 +295,8 @@ def main():
                 "capabilities": capabilities, "backend": args.backend,
                 "diagnostics_policy": {"before": args.before_diagnostics, "after": args.after_diagnostics},
                 "progress_policy_ms": {"before": args.before_progress_ms, "after": args.after_progress_ms},
+                "audio_spool_cache_roots": {"before": str(args.before_audio_spool_cache) if args.before_audio_spool_cache else None,
+                                             "after": str(args.after_audio_spool_cache) if args.after_audio_spool_cache else None},
                 "quiet_host": False, "case": case, "trials": [],
                 "notes": ["Each trial launches a fresh real worker; first/subsequent trials are not a warm persistent GPU process.",
                           "Wall includes CLI freeze/submit, queue, worker and terminal result loading; independent oracle excluded.",
@@ -307,7 +314,8 @@ def main():
                                args.timeout, args.ffmpeg, args.ffprobe,
                                diagnostics=(args.before_diagnostics if mode == "before"
                                             else args.after_diagnostics) == "enabled",
-                               progress_ms=args.before_progress_ms if mode == "before" else args.after_progress_ms)
+                               progress_ms=args.before_progress_ms if mode == "before" else args.after_progress_ms,
+                               audio_spool_cache=args.before_audio_spool_cache if mode == 'before' else args.after_audio_spool_cache)
             if digest(binaries[mode]) != evidence["binary_sha256"][mode]:
                 raise RuntimeError("benchmark binary changed during measurement")
             evidence["trials"].append({"pair": pair, "mode": mode, **result})
