@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source_commit": "a60e071b",
+  "workspace": {
+    "suites": 200,
+    "passed": 1357,
+    "failed": 0,
+    "ignored": 47
+  },
+  "logs": {
+    "workspace": {
+      "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/workspace-tests.log",
+      "bytes": 255602,
+      "sha256": "c20a82416d8f32ab395553cc3e07d3f69484eda32ac7cfe87fa74284972c12bb",
+      "exit_code": 0
+    },
+    "clippy": {
+      "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/clippy-final.log",
+      "bytes": 580,
+      "sha256": "9c7e5fd6b48838feaceddf80f661f690247e660a94484279e165b74a11ec8bf5",
+      "exit_code": 0
+    },
+    "release": {
+      "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-010/default-release-build.log",
+      "bytes": 757,
+      "sha256": "922987b88ed33ce86eea375abdf6e6c42f27be7559aa3063d858edf14daac6a2",
+      "exit_code": 0
+    }
+  },
+  "other_checks": {
+    "fmt": 0,
+    "backlog": 0,
+    "diff_check": 0
+  }
+}

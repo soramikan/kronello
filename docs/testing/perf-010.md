@@ -1,6 +1,6 @@
 # PERF-010: 色変換直接書込みと複数出力共有
 
-状態: `in_progress`。PERF-006〜014の全計画は[依頼計画](performance-export-plan.md)で追跡する。本記録の初期比較だけでPERF-010の受け入れ完了としない。
+状態: `done`。PERF-006〜014の全計画は[依頼計画](performance-export-plan.md)で追跡する。初期比較と追加検証を区別し、全体検証の完了後に受け入れた。
 
 ## 実装
 
@@ -30,7 +30,7 @@ native RGBA→YUV変換は既存の独立stage計測を使う。`KRONELLO_ENCODE
 
 ## 追加検証（初期17比較）
 
-固定fixtureを交互に3pairsずつ実行し、11ケースの変更前後比較66worker trialsと、ProRes/DNx/AV1の変換threads1→2/4比較36trials、合計102trialsを完了した。[工程要約](perf-010-stage-summary.json)と[全測定](perf-010-measurements.json)を参照する。native helperを含むmedia unit/delivery/HDR/profilesは33 passed・2 ignored。fmt、backlog check、all-targets workspace Clippyは成功。workspace testsは実行中である。
+固定fixtureを交互に3pairsずつ実行し、11ケースの変更前後比較66worker trialsと、ProRes/DNx/AV1の変換threads1→2/4比較36trials、合計102trialsを完了した。[工程要約](perf-010-stage-summary.json)と[全測定](perf-010-measurements.json)を参照する。native helperを含むmedia unit/delivery/HDR/profilesは33 passed・2 ignored。fmt、backlog check、all-targets workspace Clippyは成功。workspace testsは最終sourceで成功した（下記）。
 
 - 同じ4K入力のDNx MOV/MXFは変換80→40、encode2→1、bundle132,710,400→66,355,200 bytes。独立decoded bits・PTS/DTS/duration・layoutは一致する。
 - AV1 ALAC/AAC/Opusの3container・12framesは変換432→144、encode36→12、bundle49,766,400→16,588,800 bytes。各audio codecのdecoded sample、PTS、packet priming/discard padding、snapshot metadataを維持する。
@@ -49,7 +49,8 @@ H.264はframe/PCM bits、PTS/DTS/duration、color、AAC priming/padding、contai
 
 通常設定の最終release binaryは`e188f8ae662430611006d4b2c6de4a45e898aaf3c2fdfa74ea0d598ba0c0b11c`。初期binaryとの差は`cfg(test)` module配置修正で、runtimeの直接変換/共有/native policyは同じ。H.264の最後の6trialsはこのbinaryで行った。
 
-## 残る受け入れ
+## 最終受け入れ
 
-- 実行中のworkspace testsの終了結果と範囲を確認する。全体成功前にバックログをdoneにしない。
-- 最終sourceと残る検証記録を照合し、受け入れ完了後にPERF-011/012へ進む。PERF-013/014を含む全計画を維持する。
+`a60e071`のsourceで`cargo fmt --all --check`、`cargo clippy --workspace --all-targets --locked -- -D warnings`、`cargo test --workspace --locked`、`python3 scripts/backlog.py check`が成功した。workspaceは200 suites / 1,357 passed / 0 failed / 47 ignored。ignoredは成功数に含めない。実native/GPUを必要とするテストはMetal利用可能なhostで実行した。[検証receipt](perf-010-validation.json)はログhashとsource commitを固定する。
+
+全19比較114worker trialsの源資料、packet/semanticの異なる保証、threads1/2/4とencoder待ちの判断を上記に記録してPERF-010をdoneとした。全依頼は完了しておらず、PERF-011〜014を引き続き追跡する。

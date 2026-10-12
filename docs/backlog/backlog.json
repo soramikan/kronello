@@ -2611,7 +2611,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "色変換直接書込みと複数出力共有",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-007",
         "PERF-008",
@@ -2629,7 +2629,7 @@
       "priority": "P1",
       "area": "performance",
       "title": "書き出し音声mix共有と長尺source準備",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-010"
       ],

@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 5 | 1 | 19 | 0 | 25 |
+| M10 | 4 | 1 | 20 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1295,7 +1295,7 @@
 
 ### PERF-010 色変換直接書込みと複数出力共有
 
-- 優先度: P1 / 領域: performance / 状態: in_progress
+- 優先度: P1 / 領域: performance / 状態: done
 - 依存: PERF-007, PERF-008, PERF-009
 - 受け入れ条件:
   - 変換を既存frame bufferへstride/offset付きで直接書き、一時Vec・行copy・HDR→SDR中間配列を除く。transfer/alpha/範囲検査/丸め順とf32丸め境界を維持し変換bytes一致を検証する
@@ -1304,7 +1304,7 @@
 
 ### PERF-011 書き出し音声mix共有と長尺source準備
 
-- 優先度: P1 / 領域: performance / 状態: planned
+- 優先度: P1 / 領域: performance / 状態: in_progress
 - 依存: PERF-010
 - 受け入れ条件:
   - 音声plan/意味版/source lock/範囲/layout/gain/effects/clippingを同一性に含め同一音声のmix/量子化を一回に共有する。codec block差を小さいbufferで吸収しDSP/WSOLA加算順と状態遷移を維持する
