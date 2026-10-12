@@ -1,0 +1,26 @@
+{
+  "id": "cae2b435-38fa-43ac-ad1e-35bc0dd7a381",
+  "schema_version": 1,
+  "semantic_version": 1,
+  "name": "PERF-006 fixed codec input",
+  "compositions": [],
+  "curves": [],
+  "sequences": [
+    {
+      "id": "f9266381-708a-4cba-95bb-6d1cba1bdab8",
+      "extent": {
+        "width": 640.0,
+        "height": 360.0
+      },
+      "frame_rate": {
+        "num": "24",
+        "den": "1"
+      },
+      "audio_rate": 48000,
+      "working_space": "linear_rec709",
+      "tracks": [],
+      "transitions": [],
+      "markers": []
+    }
+  ]
+}

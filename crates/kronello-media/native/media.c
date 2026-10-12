@@ -5,6 +5,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
+#include <libavutil/time.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
@@ -31,6 +32,7 @@ typedef struct Km {
     __typeof__(&avutil_license) avutil_license;
     __typeof__(&avutil_configuration) avutil_configuration;
     __typeof__(&av_version_info) av_version_info;
+    __typeof__(&av_gettime_relative) av_gettime_relative;
     __typeof__(&av_frame_alloc) av_frame_alloc;
     __typeof__(&av_frame_free) av_frame_free;
     __typeof__(&av_frame_unref) av_frame_unref;
@@ -188,6 +190,7 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(0, avutil_license);
     LOAD(0, avutil_configuration);
     LOAD(0, av_version_info);
+    LOAD(0, av_gettime_relative);
     LOAD(0, av_frame_alloc);
     LOAD(0, av_frame_free);
     LOAD(0, av_frame_unref);
@@ -478,7 +481,20 @@ typedef struct Encoder {
     /* Bounded metadata for delayed packets, not retained image frames. */
     struct { int64_t pts, duration; } spans[256];
     int span_count;
+    int measure;
+    /* conversion calls/us, send calls/us, receive calls/us, packet mux us,
+     * trailer/close us. These are observations, not encode settings. */
+    uint64_t measurements[8];
 } Encoder;
+static int64_t encoder_clock(Encoder *e) { return e->measure ? e->k->av_gettime_relative() : 0; }
+static void encoder_elapsed(Encoder *e, int slot, int64_t start) {
+    if(e->measure) {
+        int64_t end=e->k->av_gettime_relative();
+        if(end>=start) e->measurements[slot]+=(uint64_t)(end-start);
+    }
+}
+void km_encoder_measure(Encoder *e, int enabled) { e->measure=enabled!=0; }
+void km_encoder_measurements(Encoder *e, uint64_t out[8]) { memcpy(out,e->measurements,sizeof(e->measurements)); }
 void km_encoder_close(Encoder *e) {
     if(!e)return;
     Km *k=e->k;
@@ -597,7 +613,10 @@ failed:km_encoder_close(e);return NULL;
 }
 static int write_packets(Encoder *e) {
     for(;;){
+        int64_t receive=encoder_clock(e);
         int ret=e->k->avcodec_receive_packet(e->codec,e->packet);
+        if(e->measure)++e->measurements[4];
+        encoder_elapsed(e,5,receive);
         if(ret==AVERROR(EAGAIN)||ret==AVERROR_EOF)return 0;
         if(ret<0)return fail(e->k,ret,"receive packet");
         /* Packet PTS identifies its own input span before mux rescaling.
@@ -613,7 +632,9 @@ static int write_packets(Encoder *e) {
                 (size_t)(e->span_count-span-1)*sizeof(e->spans[0]));
         --e->span_count;
         e->k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
+        int64_t mux=encoder_clock(e);
         ret=e->k->av_interleaved_write_frame(e->format,e->packet);e->k->av_packet_unref(e->packet);
+        encoder_elapsed(e,6,mux);
         if(ret<0)return fail(e->k,ret,"write packet");
     }
 }
@@ -622,20 +643,32 @@ int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts,int64_t duration
     if(e->span_count==256)return fail(e->k,AVERROR(ENOSPC),"encoder delayed span budget exceeded");
     int ret=e->k->av_frame_make_writable(e->frame);if(ret<0)return fail(e->k,ret,"writable frame");
     const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->input_stride,0,0,0};
+    int64_t conversion=encoder_clock(e);
     ret=e->k->sws_scale(e->sws,data,stride,0,e->codec->height,e->frame->data,e->frame->linesize);
+    if(e->measure)++e->measurements[0];
+    encoder_elapsed(e,1,conversion);
     if(ret!=e->codec->height)return fail(e->k,AVERROR_INVALIDDATA,"pixel conversion");
     e->frame->pts=pts; e->frame->duration=duration;
     e->spans[e->span_count].pts=pts;
     e->spans[e->span_count].duration=duration;
     ++e->span_count;
-    ret=e->k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
+    int64_t send=encoder_clock(e);
+    ret=e->k->avcodec_send_frame(e->codec,e->frame);
+    if(e->measure)++e->measurements[2];
+    encoder_elapsed(e,3,send);
+    if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
 }
 int km_encoder_finish(Encoder *e) {
-    int ret=e->k->avcodec_send_frame(e->codec,NULL);if(ret<0)return fail(e->k,ret,"flush encoder");
+    int64_t send=encoder_clock(e);
+    int ret=e->k->avcodec_send_frame(e->codec,NULL);
+    if(e->measure)++e->measurements[2];
+    encoder_elapsed(e,3,send);
+    if(ret<0)return fail(e->k,ret,"flush encoder");
     ret=write_packets(e);if(ret<0)return ret;
     if(e->span_count)return fail(e->k,AVERROR(EINVAL),"encoder flush omitted submitted frames");
+    int64_t trailer=encoder_clock(e);
     ret=e->k->av_write_trailer(e->format);if(ret<0)return fail(e->k,ret,"write trailer");
-    ret=e->k->avio_closep(&e->format->pb);if(ret<0)return fail(e->k,ret,"close output");return 0;
+    ret=e->k->avio_closep(&e->format->pb);encoder_elapsed(e,7,trailer);if(ret<0)return fail(e->k,ret,"close output");return 0;
 }
 const char *km_encoder_format(Encoder *e){return e->k->av_get_pix_fmt_name(e->codec->pix_fmt);}
 

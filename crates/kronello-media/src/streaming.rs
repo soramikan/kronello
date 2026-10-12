@@ -32,6 +32,7 @@ pub(crate) struct SpoolSources {
     sources: BTreeMap<(AssetId, u32), Source>,
     pub decoded_bytes: u64,
     read_bytes: Cell<u64>,
+    window_payload_bytes: Cell<u64>,
 }
 impl SpoolSources {
     pub fn new() -> Self {
@@ -39,6 +40,7 @@ impl SpoolSources {
             sources: BTreeMap::new(),
             decoded_bytes: 0,
             read_bytes: Cell::new(0),
+            window_payload_bytes: Cell::new(0),
         }
     }
     pub fn read_bytes(&self) -> u64 {
@@ -66,6 +68,15 @@ impl SpoolSources {
         let report = runtime.decode_audio_stream(&path, stream, &mut |chunk, _mask| {
             checkpoint(0)?;
             let bytes: Vec<_> = chunk.iter().flat_map(|v| v.to_le_bytes()).collect();
+            kronello_render::count_execution("audio_spool_chunks", 1);
+            kronello_render::observe_execution_payload(
+                "audio_decode_chunk",
+                (chunk.len() as u64) * 4,
+            );
+            kronello_render::observe_execution_payload(
+                "audio_spool_write_buffer",
+                bytes.len() as u64,
+            );
             file.write_all(&bytes)?;
             Ok(())
         })?;
@@ -143,7 +154,15 @@ impl ChannelSourceReader for SpoolSources {
                 .file
                 .seek(SeekFrom::Start((begin as u64) * frame_bytes as u64))
                 .map_err(|e| AudioError::SourceRead(e.to_string()))?;
+            let old_capacity = window.bytes.capacity() as u64;
             window.bytes.resize(count * frame_bytes, 0);
+            let retained = self
+                .window_payload_bytes
+                .get()
+                .saturating_sub(old_capacity)
+                .saturating_add(window.bytes.capacity() as u64);
+            self.window_payload_bytes.set(retained);
+            kronello_render::observe_execution_payload("audio_source_windows", retained);
             let Window { file, bytes, .. } = &mut *window;
             file.read_exact(bytes)
                 .map_err(|e| AudioError::SourceRead(e.to_string()))?;

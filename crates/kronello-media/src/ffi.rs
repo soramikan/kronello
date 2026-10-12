@@ -86,6 +86,8 @@ unsafe extern "C" {
     fn km_encoder_close(e: *mut c_void);
     fn km_encoder_frame(e: *mut c_void, rgba: *const u8, pts: i64, duration: i64) -> c_int;
     fn km_encoder_finish(e: *mut c_void) -> c_int;
+    fn km_encoder_measure(e: *mut c_void, enabled: c_int);
+    fn km_encoder_measurements(e: *mut c_void, out: *mut u64);
     fn km_encoder_frame_size(e: *mut c_void) -> c_int;
     fn km_encoder_format(e: *mut c_void) -> *const c_char;
     fn km_encoder_open_dnx(
@@ -458,6 +460,7 @@ pub(crate) fn video_rgba(
     frame: &kronello_render::DecodedVideoFrame,
     full_range: bool,
 ) -> Result<Vec<u8>, MediaError> {
+    let _measure = kronello_render::measure_execution_stage("source_rgba8_conversion");
     if frame.width == 0
         || frame.height == 0
         || u64::from(frame.width) * u64::from(frame.height) > DECODED_VIDEO_PIXEL_BUDGET
@@ -488,6 +491,9 @@ pub(crate) fn video_rgba(
     {
         return Err(MediaError::Decode(runtime.error()));
     }
+    kronello_render::count_execution("source_rgba8_conversions", 1);
+    kronello_render::count_execution("source_rgba8_bytes", output.len() as u64);
+    kronello_render::observe_execution_payload("source_rgba8_buffer", output.len() as u64);
     Ok(output)
 }
 pub(crate) fn video_rgba64(
@@ -539,6 +545,8 @@ pub(crate) struct NativeEncoder<'a> {
     runtime: &'a NativeRuntime,
     pub pixel_format: String,
     pub frame_size: u64,
+    measured: bool,
+    last_measurements: [u64; 8],
 }
 impl<'a> NativeEncoder<'a> {
     pub(crate) fn open_color(
@@ -584,7 +592,12 @@ impl<'a> NativeEncoder<'a> {
                 MediaError::Encode(runtime.error())
             }
         })?;
+        let measured = kronello_render::execution_diagnostics_enabled();
+        // SAFETY: ptr is our live, exclusively owned native encoder.
+        unsafe { km_encoder_measure(ptr.as_ptr(), c_int::from(measured)) };
         Ok(Self {
+            measured,
+            last_measurements: [0; 8],
             ptr,
             runtime,
             pixel_format: unsafe { string(km_encoder_format(ptr.as_ptr())) },
@@ -631,7 +644,12 @@ impl<'a> NativeEncoder<'a> {
                 MediaError::Encode(runtime.error())
             }
         })?;
+        let measured = kronello_render::execution_diagnostics_enabled();
+        // SAFETY: ptr is our live, exclusively owned native encoder.
+        unsafe { km_encoder_measure(ptr.as_ptr(), c_int::from(measured)) };
         Ok(Self {
+            measured,
+            last_measurements: [0; 8],
             ptr,
             runtime,
             pixel_format: unsafe { string(km_encoder_format(ptr.as_ptr())) },
@@ -645,18 +663,57 @@ impl<'a> NativeEncoder<'a> {
         pts: i64,
         duration: i64,
     ) -> Result<(), MediaError> {
-        if unsafe { km_encoder_frame(self.ptr.as_ptr(), pixels.as_ptr(), pts, duration) } < 0 {
+        let result = unsafe { km_encoder_frame(self.ptr.as_ptr(), pixels.as_ptr(), pts, duration) };
+        self.record_measurements();
+        if result < 0 {
             Err(MediaError::Encode(self.runtime.error()))
         } else {
             Ok(())
         }
     }
     pub(crate) fn finish(&mut self) -> Result<(), MediaError> {
-        if unsafe { km_encoder_finish(self.ptr.as_ptr()) } < 0 {
+        let result = unsafe { km_encoder_finish(self.ptr.as_ptr()) };
+        self.record_measurements();
+        if result < 0 {
             Err(MediaError::Encode(self.runtime.error()))
         } else {
             Ok(())
         }
+    }
+    fn record_measurements(&mut self) {
+        if !self.measured {
+            return;
+        }
+        let mut values = [0_u64; 8];
+        // SAFETY: encoder remains owned/live and the output covers exactly
+        // the eight uint64_t counters written by the audited shim.
+        unsafe { km_encoder_measurements(self.ptr.as_ptr(), values.as_mut_ptr()) };
+        for (calls, time, name) in [
+            (0, 1, "native_rgba_to_yuv"),
+            (2, 3, "native_codec_send"),
+            (4, 5, "native_codec_receive"),
+        ] {
+            let count = values[calls].saturating_sub(self.last_measurements[calls]);
+            if count > 0 {
+                kronello_render::count_execution(name, count);
+                kronello_render::record_execution_duration(
+                    name,
+                    std::time::Duration::from_micros(
+                        values[time].saturating_sub(self.last_measurements[time]),
+                    ),
+                );
+            }
+        }
+        for (index, name) in [(6, "native_packet_write"), (7, "native_trailer_close")] {
+            let delta = values[index].saturating_sub(self.last_measurements[index]);
+            if delta > 0 {
+                kronello_render::record_execution_duration(
+                    name,
+                    std::time::Duration::from_micros(delta),
+                );
+            }
+        }
+        self.last_measurements = values;
     }
 }
 impl Drop for NativeEncoder<'_> {

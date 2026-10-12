@@ -1021,6 +1021,9 @@ pub struct AvExportReport {
     pub outputs: Vec<AvExportOutputReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub streaming: Option<StreamingExportReport>,
+    /// Opt-in execution measurements, excluded from snapshot identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub performance: Option<crate::ExportDiagnostics>,
 }
 impl MediaRuntime {
     /// Read the stream's container codec tag (little-endian FourCC when textual).
@@ -1328,6 +1331,15 @@ impl MediaRuntime {
         request: &AvExportRequest,
         checkpoint: &mut dyn FnMut(u64) -> Result<(), MediaError>,
     ) -> Result<AvExportReport, MediaError> {
+        let diagnostics = crate::ExportDiagnosticsCollector::from_environment();
+        let _diagnostic_scope = diagnostics.activate();
+        let preparation = diagnostics.time("preparation");
+        let mut measured_checkpoint = |completed| {
+            let _time = diagnostics.time("checkpoint_callback");
+            diagnostics.count("checkpoint_callbacks", 1);
+            checkpoint(completed)
+        };
+        let checkpoint: &mut dyn FnMut(u64) -> Result<(), MediaError> = &mut measured_checkpoint;
         checkpoint(0)?;
         if snapshots.is_empty() || snapshots.len() != request.outputs.len() + 1 {
             return Err(MediaError::InvalidInput(
@@ -1512,6 +1524,7 @@ impl MediaRuntime {
             .unwrap_or(Path::new("."));
         // Every intermediate is on the destination volume and owned by RAII.
         let stage = tempfile::tempdir_in(parent)?;
+        drop(preparation);
         // Decode the union of audio sources referenced by any leg once.
         let mut sources = crate::streaming::SpoolSources::new();
         for snapshot in snapshots {
@@ -1527,6 +1540,8 @@ impl MediaRuntime {
                             _ => None,
                         })
                         .ok_or_else(|| MediaError::AssetMissing(clip.asset.to_string()))?;
+                    let _decode = diagnostics.time("audio_decode_spool");
+                    diagnostics.count("audio_source_decodes", 1);
                     sources.decode(
                         self,
                         asset,
@@ -1561,6 +1576,7 @@ impl MediaRuntime {
             // ADR-0124: the snapshot declares the single output layout; the
             // bus converts sources deterministically and never folds down.
             let layout = leg.snapshot.audio_layout;
+            let audio_prepare = diagnostics.time("audio_plan_encoder_open");
             let mut encoder =
                 crate::ffi::NativeAudioEncoder::open(&self.native, file.path(), kind, layout)?;
             let plan = if leg.snapshot.audio == AudioSourceMode::Document {
@@ -1576,6 +1592,7 @@ impl MediaRuntime {
             // instead of replaying each placement from its start; output is
             // bit-identical to the stateless evaluator (ADR-0117).
             let mut session = plan.as_ref().map(|plan| plan.playback_session());
+            drop(audio_prepare);
             let mut start = samples.start;
             while start < samples.end {
                 checkpoint(0)?;
@@ -1588,6 +1605,7 @@ impl MediaRuntime {
                     SAMPLE_RATE.sample_to_time(start)?,
                     SAMPLE_RATE.sample_to_time(end)?,
                 )?;
+                let mix = diagnostics.time("audio_mix");
                 let bus = match (&plan, session.as_mut()) {
                     (Some(plan), Some(session)) => {
                         plan.mix_channels_streaming(&sources, range, layout, session)?
@@ -1597,14 +1615,27 @@ impl MediaRuntime {
                         kronello_audio::mix_channels(&leg.snapshot.clips, &sources, range, layout)?
                     }
                 };
+                drop(mix);
+                let quantize = diagnostics.time("audio_quantize");
                 let quantized = bus.quantize_pcm24(request.clipping)?;
+                diagnostics.peak_payload(
+                    "audio_quantized_block",
+                    (quantized.samples.len() as u64) * 4,
+                );
+                drop(quantize);
+                diagnostics.count("audio_mix_blocks", 1);
+                diagnostics.count("audio_mixed_frames", (end - start) as u64);
                 clipped_samples = clipped_samples
                     .checked_add(quantized.clipped_samples)
                     .ok_or_else(|| MediaError::InvalidInput("clipping count overflow".into()))?;
+                let encode = diagnostics.time("audio_encode");
                 encoder.frame(&quantized.samples)?;
+                drop(encode);
                 start = end;
             }
+            let finish = diagnostics.time("audio_flush");
             encoder.finish()?;
+            drop(finish);
             drop(encoder);
             audio_reports.push(Some(AudioEncodeReport {
                 codec: kind.codec_name().into(),
@@ -1664,12 +1695,14 @@ impl MediaRuntime {
                 bundles: self.video_pipeline_mode.bundles(),
                 duration: expected_video,
                 legs: video_legs.clone(),
+                diagnostics: diagnostics.clone(),
             };
             let (frames, result) = pipeline::run(config, checkpoint, |producer, checkpoint| {
                 let mut frames = Vec::with_capacity(times.len());
                 for (number, (index, time)) in times.iter().enumerate() {
                     checkpoint(number as u64)?;
                     let mut bundle = producer.acquire()?;
+                    let render = diagnostics.time("render_tiles_and_conversion");
                     let mut frame_metadata = render_frame_linear_tiles(
                         &snapshot.render,
                         fonts,
@@ -1679,11 +1712,15 @@ impl MediaRuntime {
                             region: request.region,
                         },
                         &mut |[x, y], tile, output| {
+                            let _conversion = diagnostics.time("output_color_conversion_copy");
+                            diagnostics.count("rendered_tiles", 1);
+                            diagnostics.peak_payload("linear_tile", (output.len() as u64) * 16);
                             for (leg, buffer) in video_legs.iter().zip(&mut bundle) {
                                 let stride = leg.stride();
                                 if stride == 0 {
                                     continue;
                                 }
+                                diagnostics.count("output_tile_conversions", 1);
                                 let bytes = if let Some(transfer) = leg.profile.hdr_transfer() {
                                     hdr_rgba(&output, leg.background, transfer)
                                 } else if render_hdr.is_some()
@@ -1719,6 +1756,8 @@ impl MediaRuntime {
                             Ok(())
                         },
                     )?;
+                    drop(render);
+                    diagnostics.count("rendered_frames", 1);
                     if frame_metadata.snapshot_content_hash != render_hash {
                         return Err(MediaError::Encode(
                             "video snapshot identity mismatch".into(),
@@ -1759,6 +1798,7 @@ impl MediaRuntime {
                         return Err(MediaError::Encode("missing staged audio output".into()));
                     };
                     audio_stage_bytes += std::fs::metadata(temp.path())?.len();
+                    let _validation = diagnostics.time("audio_output_validation");
                     let probe = self.probe(temp.path())?;
                     probe.verify_delivery(leg.profile, leg.snapshot.audio_layout)?;
                     let slack = Rational::new(leg.profile.audio_frame_slack(), 48_000)?;
@@ -1796,6 +1836,7 @@ impl MediaRuntime {
                     };
                     video_stage_bytes += std::fs::metadata(video_file)?.len();
                     audio_stage_bytes += std::fs::metadata(audio_path)?.len();
+                    let intermediate_validation = diagnostics.time("intermediate_validation");
                     let video_probe = self.probe(video_file)?;
                     let audio_probe = self.probe(audio_path)?;
                     let audio_slack = Rational::new(leg.profile.audio_frame_slack(), 48_000)?;
@@ -1824,6 +1865,8 @@ impl MediaRuntime {
                             video_probe.streams, audio_probe.streams
                         )));
                     }
+                    drop(intermediate_validation);
+                    let _mux = diagnostics.time("mux_container_validation");
                     let (temp, probe) = self.mux_movie_stage(
                         video_file,
                         audio_path,
@@ -1843,6 +1886,7 @@ impl MediaRuntime {
         checkpoint(times.len() as u64)?;
         // All legs verified; publish in request order. A failure here is still
         // atomic per destination and never reports partial success.
+        let publication = diagnostics.time("media_publication");
         let mut reports = Vec::with_capacity(legs.len());
         for (index, leg) in legs.iter().enumerate() {
             let temp = staged[index]
@@ -1862,6 +1906,7 @@ impl MediaRuntime {
                 warnings: std::mem::take(&mut leg_warnings[index]),
             });
         }
+        drop(publication);
         let primary = reports[0].clone();
         Ok(AvExportReport {
             schema_version: 1,
@@ -1878,6 +1923,7 @@ impl MediaRuntime {
             audio: primary.audio.clone(),
             probe: primary.probe.clone(),
             outputs: reports,
+            performance: diagnostics.snapshot(),
             streaming: Some(StreamingExportReport {
                 audio_spool_write_bytes,
                 audio_window_read_bytes,

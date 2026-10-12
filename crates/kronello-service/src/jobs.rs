@@ -1168,6 +1168,7 @@ impl Service<'_> {
         store: &JobStore,
         record: &JobRecord,
         fixed: &FixedInput,
+        diagnostics: &kronello_media::ExportDiagnosticsCollector,
     ) -> Result<(), ServiceError> {
         if !fixed.kind_matches_record(record) {
             return Err(ServiceError::new(
@@ -1193,8 +1194,10 @@ impl Service<'_> {
             return crate::capture::execute_capture_job(store, record, capture);
         }
         let (snapshot, request) = fixed.render_parts()?;
+        let validation = diagnostics.time("fixed_input_validation");
         self.validate_fixed_job(record, fixed)?;
-        self.execute_fixed_job(store, record, snapshot, request)
+        drop(validation);
+        self.execute_fixed_job(store, record, snapshot, request, diagnostics)
     }
     pub(crate) fn resume_job(&self, request: JobRequest) -> Result<JobRecord, ServiceError> {
         let store = self.jobs()?;
@@ -1611,7 +1614,9 @@ impl Service<'_> {
         record: &JobRecord,
         snapshot: &RenderSnapshot,
         request: &RenderSubmitRequest,
+        diagnostics: &kronello_media::ExportDiagnosticsCollector,
     ) -> Result<(), ServiceError> {
+        let preparation = diagnostics.time("locked_fonts_staging_preparation");
         let sidecar = matches!(request.output, JobOutput::CaptionSidecar { .. });
         // Sidecar jobs serialize stored cue documents and never rasterize;
         // they do not require locked font inputs.
@@ -1629,8 +1634,11 @@ impl Service<'_> {
         let destination = &request.render.output_directory;
         let staging = store.staging(record)?;
         let stage_path = staging.output();
+        drop(preparation);
         let mut failure = None;
         let mut checkpoint = |completed| {
+            let _checkpoint = diagnostics.time("worker_checkpoint");
+            diagnostics.count("worker_checkpoint_calls", 1);
             #[cfg(all(feature = "test-job-control", debug_assertions))]
             if completed > 0
                 && std::env::var_os("KRONELLO_TEST_JOB_DEVICE_LOST").as_deref()
@@ -1791,6 +1799,7 @@ impl Service<'_> {
                             }
                             // Every leg verifies independently; movie legs also
                             // bind snapshot identities embedded by the muxer.
+                            let validation = diagnostics.time("worker_output_validation");
                             for (index, leg) in report.outputs.iter().enumerate() {
                                 let probe = runtime.probe(&leg.output).map_err(|e| {
                                     ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
@@ -1824,6 +1833,8 @@ impl Service<'_> {
                                     "MOV frame count or snapshot identity differs",
                                 ));
                             }
+                            drop(validation);
+                            let _serialization = diagnostics.time("report_json_serialization");
                             serde_json::to_value(report)?
                         }
                     };
@@ -1876,6 +1887,7 @@ impl Service<'_> {
         } else {
             stage_path.clone()
         };
+        let receipt = diagnostics.time("publication_receipt_hash_write");
         if request.outputs.is_empty() {
             store.prepare_publication(record, &artifact_root, result_json.clone())?;
         } else {
@@ -1891,6 +1903,7 @@ impl Service<'_> {
                 result_json.clone(),
             )?;
         }
+        drop(receipt);
         // Staged leg paths -> publish destinations; computed before the lease
         // transaction so the closure performs only atomic renames.
         let mut publication = Vec::with_capacity(request.outputs.len() + 1);
@@ -1910,6 +1923,7 @@ impl Service<'_> {
                 ));
             }
         }
+        let publication_timer = diagnostics.time("worker_publication_fence_commit");
         store.publish_attempt(&record.id, record.attempt, result_json, || {
             for (staged, target) in &publication {
                 kronello_jobs::publish_path(staged, target)?;
@@ -1922,6 +1936,7 @@ impl Service<'_> {
             }
             Ok(())
         })?;
+        drop(publication_timer);
         Ok(())
     }
 }
@@ -1990,21 +2005,50 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
         if args.len() != 3 || args[1] != "--job" {
             return Err(JobError::new("INVALID_REQUEST", "worker --job <id>"));
         }
+        let diagnostics = kronello_media::ExportDiagnosticsCollector::from_environment();
+        let _diagnostic_scope = diagnostics.activate();
         let store = JobStore::open(JobConfig::from_env()?)?;
         let id = &args[2];
         let owned_attempt = store.get(id)?.attempt;
         let heartbeat = kronello_jobs::WorkerHeartbeat::start(store.clone(), id.clone());
         let result = (|| {
+            let slot_wait = diagnostics.time("worker_slot_wait");
             store.wait_for_slot(id)?;
+            drop(slot_wait);
+            let read = diagnostics.time("worker_fixed_input_read");
             let record = store.get(id)?;
             let fixed: FixedInput = serde_json::from_slice(&store.input(&record)?)?;
+            drop(read);
+            let _execute = diagnostics.time("worker_execute_fixed");
             Service::new(fixed.backend)
-                .render_fixed_job(&store, &record, &fixed)
+                .render_fixed_job(&store, &record, &fixed, &diagnostics)
                 .map_err(job_error)
         })();
         drop(heartbeat);
         if let Err(error) = &result {
             store.finish_error_attempt(id, owned_attempt, error)?;
+        }
+        if let Some(measurements) = diagnostics.snapshot() {
+            let path = store
+                .directory(id)?
+                .join(format!("performance-attempt-{owned_attempt}.json"));
+            let evidence = serde_json::json!({
+                "schema_version": 1, "job": id, "attempt": owned_attempt,
+                "pid": std::process::id(), "succeeded": result.is_ok(),
+                "worker": measurements, "job_store": store.write_diagnostics(),
+            });
+            // Diagnostics must not turn an already published job into failure.
+            let write = (|| -> Result<(), std::io::Error> {
+                use std::io::Write;
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)?;
+                file.write_all(serde_json::to_string_pretty(&evidence)?.as_bytes())
+            })();
+            if let Err(error) = write {
+                eprintln!("worker performance evidence unavailable job={id}: {error}");
+            }
         }
         result
     })();

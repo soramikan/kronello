@@ -223,6 +223,22 @@ pub struct PruneResult {
 #[derive(Debug, Clone)]
 pub struct JobStore {
     config: JobConfig,
+    write_diagnostics: Option<std::sync::Arc<JobWriteCounters>>,
+}
+/// Committed explicit transactions that changed records, from this store and
+/// its clones. Schema setup and submitter-process autocommit INSERTs are outside
+/// this worker observation. Rolled-back, busy and read-only commits do not count.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct JobWriteDiagnostics {
+    pub committed_write_transactions: u64,
+    pub completed_checkpoints: u64,
+    pub completed_heartbeats: u64,
+}
+#[derive(Debug, Default)]
+struct JobWriteCounters {
+    writes: std::sync::atomic::AtomicU64,
+    checkpoints: std::sync::atomic::AtomicU64,
+    heartbeats: std::sync::atomic::AtomicU64,
 }
 pub fn now_ms() -> i64 {
     SystemTime::now()
@@ -284,7 +300,12 @@ impl JobStore {
         config.validate()?;
         std::fs::create_dir_all(config.state_root.join("jobs"))?;
         std::fs::create_dir_all(config.state_root.join("job-results"))?;
-        let store = Self { config };
+        let store = Self {
+            config,
+            write_diagnostics: (std::env::var_os("KRONELLO_EXPORT_DIAGNOSTICS").as_deref()
+                == Some(std::ffi::OsStr::new("1")))
+            .then(|| std::sync::Arc::new(JobWriteCounters::default())),
+        };
         let db = store.connect()?;
         let version: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version == 0 {
@@ -293,6 +314,26 @@ impl JobStore {
             db.execute_batch("BEGIN IMMEDIATE; CREATE TABLE IF NOT EXISTS job_keys(project_id TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY(project_id,key)); PRAGMA user_version=2; COMMIT;")?;
         }
         Ok(store)
+    }
+    pub fn write_diagnostics(&self) -> Option<JobWriteDiagnostics> {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.write_diagnostics
+            .as_ref()
+            .map(|c| JobWriteDiagnostics {
+                committed_write_transactions: c.writes.load(Relaxed),
+                completed_checkpoints: c.checkpoints.load(Relaxed),
+                completed_heartbeats: c.heartbeats.load(Relaxed),
+            })
+    }
+    fn commit_measured(&self, tx: rusqlite::Transaction<'_>) -> Result<(), JobError> {
+        // Each transaction uses a fresh connection, so prior transactions do
+        // not contribute to total_changes. Count only after commit succeeds.
+        let wrote = tx.total_changes() > 0;
+        tx.commit()?;
+        if wrote && let Some(c) = &self.write_diagnostics {
+            c.writes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(())
     }
     pub fn config(&self) -> &JobConfig {
         &self.config
@@ -493,7 +534,7 @@ impl JobStore {
                 "INSERT INTO job_keys(project_id,key,payload,job_id) VALUES(?1,?2,?3,?4)",
                 params![r.project_id, key, payload, r.id],
             )?;
-            tx.commit()?;
+            self.commit_measured(tx)?;
             Ok(KeyedSubmission::Submitted(r))
         })();
         match result {
@@ -535,7 +576,7 @@ impl JobStore {
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         recover(&tx, self.config.heartbeat_timeout)?;
         let list = records(&tx)?;
-        tx.commit()?;
+        self.commit_measured(tx)?;
         drop(db);
         Ok(list)
     }
@@ -566,7 +607,7 @@ impl JobStore {
         let mut r = read(&tx, id)?;
         f(&mut r)?;
         save(&tx, &r)?;
-        tx.commit()?;
+        self.commit_measured(tx)?;
         Ok(r)
     }
     pub fn cancel(&self, id: &str) -> Result<JobRecord, JobError> {
@@ -614,7 +655,11 @@ impl JobStore {
         }
         r.heartbeat_at_ms = now_ms();
         save(&tx, &r)?;
-        tx.commit()?;
+        self.commit_measured(tx)?;
+        if let Some(c) = &self.write_diagnostics {
+            c.heartbeats
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
         Ok(())
     }
     pub fn claim(&self, id: &str) -> Result<bool, JobError> {
@@ -623,11 +668,11 @@ impl JobStore {
         recover(&tx, self.config.heartbeat_timeout)?;
         let mut r = read(&tx, id)?;
         if !r.status.active() {
-            tx.commit()?;
+            self.commit_measured(tx)?;
             return Err(JobError::new("JOB_INTERRUPTED", "job is terminal"));
         }
         if r.worker_pid.is_some_and(|pid| pid != std::process::id()) {
-            tx.commit()?;
+            self.commit_measured(tx)?;
             return Err(JobError::new(
                 "JOB_ALREADY_OWNED",
                 "another worker owns job",
@@ -637,7 +682,7 @@ impl JobStore {
         r.worker_pid = Some(std::process::id());
         if r.cancel_requested {
             save(&tx, &r)?;
-            tx.commit()?;
+            self.commit_measured(tx)?;
             return Err(JobError::new("JOB_CANCELED", "cancel requested"));
         }
         let all = records(&tx)?;
@@ -662,7 +707,7 @@ impl JobStore {
             r.heartbeat_at_ms = now_ms();
             save(&tx, &r)?;
         }
-        tx.commit()?;
+        self.commit_measured(tx)?;
         Ok(acquired)
     }
     fn worker_lock_budget(&self) -> Duration {
@@ -717,7 +762,13 @@ impl JobStore {
                 Ok(())
             });
             match result {
-                Ok(_) => return Ok(()),
+                Ok(_) => {
+                    if let Some(c) = &self.write_diagnostics {
+                        c.checkpoints
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    return Ok(());
+                }
                 Err(error) if error.is_retryable_contention() => {
                     eprintln!(
                         "worker checkpoint contention job={id} at_ms={}: {error}",
@@ -866,7 +917,7 @@ impl JobStore {
                 pruned.push(r.id);
             }
         }
-        tx.commit()?;
+        self.commit_measured(tx)?;
         Ok(PruneResult { pruned })
     }
     pub fn spawn(&self, id: &str, executable: &Path) -> Result<(), JobError> {
@@ -1027,5 +1078,75 @@ pub fn publish_path(staged: &Path, destination: &Path) -> Result<(), JobError> {
             "UNSUPPORTED_FEATURE",
             "atomic publication unavailable",
         ))
+    }
+}
+
+#[cfg(test)]
+mod write_diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn count_only_committed_writes_and_share_with_store_clones() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut store = JobStore::open(JobConfig::at(directory.path())).unwrap();
+        store.write_diagnostics = Some(std::sync::Arc::default());
+        let clone = store.clone();
+        {
+            let mut db = store.connect().unwrap();
+            let tx = db.transaction().unwrap();
+            tx.execute(
+                "INSERT INTO jobs(id,record) VALUES('counter-test','{}')",
+                [],
+            )
+            .unwrap();
+            tx.rollback().unwrap();
+        }
+        assert_eq!(
+            store
+                .write_diagnostics()
+                .unwrap()
+                .committed_write_transactions,
+            0
+        );
+        {
+            let mut db = store.connect().unwrap();
+            let tx = db.transaction().unwrap();
+            let count: i64 = tx
+                .query_row("SELECT COUNT(*) FROM jobs", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, 0);
+            store.commit_measured(tx).unwrap();
+        }
+        assert_eq!(
+            store
+                .write_diagnostics()
+                .unwrap()
+                .committed_write_transactions,
+            0
+        );
+        {
+            let mut db = clone.connect().unwrap();
+            let tx = db.transaction().unwrap();
+            tx.execute(
+                "INSERT INTO jobs(id,record) VALUES('counter-test','{}')",
+                [],
+            )
+            .unwrap();
+            clone.commit_measured(tx).unwrap();
+        }
+        assert_eq!(
+            store
+                .write_diagnostics()
+                .unwrap()
+                .committed_write_transactions,
+            1
+        );
+        assert_eq!(
+            clone
+                .write_diagnostics()
+                .unwrap()
+                .committed_write_transactions,
+            1
+        );
     }
 }

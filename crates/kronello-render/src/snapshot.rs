@@ -516,12 +516,14 @@ impl RenderSnapshot {
     /// Same sorted-object compact UTF-8/SHA-256 convention as STORE-001. Arrays
     /// retain authored order; every lock, profile, version and revision is hashed.
     pub fn content_hash(&self) -> Result<String, RenderError> {
+        let _measure = crate::measure_execution_stage("snapshot_canonical_hash");
         let value = serde_json::to_value(self)?;
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     /// Rendering content identity, excluding transaction bookkeeping only.
     /// Every document field, lock, profile, and semantic version remains hashed.
     pub fn evaluation_content_hash(&self) -> Result<String, RenderError> {
+        let _measure = crate::measure_execution_stage("snapshot_evaluation_hash");
         let mut value = serde_json::to_value(self)?;
         value
             .as_object_mut()
@@ -530,6 +532,7 @@ impl RenderSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), RenderError> {
+        let _measure = crate::measure_execution_stage("snapshot_validation");
         if let Some(temporal) = self.profile.temporal {
             temporal.validate()?;
         }
@@ -1131,6 +1134,7 @@ fn build_scene_ir_validated_inner(
     cache: &mut crate::RenderCache,
     sequence_root: Option<&Composition>,
 ) -> Result<SceneIr, RenderError> {
+    let _measure = crate::measure_execution_stage("scene_ir_evaluation");
     let (definitions, simulation_proof) =
         crate::simulation::lower(snapshot, time, fonts, cache, sequence_root)?;
     let registry = render_registry();

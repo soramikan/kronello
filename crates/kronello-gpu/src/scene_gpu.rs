@@ -592,7 +592,10 @@ impl ScenePass<'_> {
             pass.set_bind_group(0, &bind, &[]);
             pass.dispatch_workgroups(resolution[0].div_ceil(8), resolution[1].div_ceil(8), 1);
         }
-        self.gpu.queue.submit([encoder.finish()]);
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.gpu.queue.submit([encoder.finish()]);
+        }
         self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
@@ -739,7 +742,10 @@ impl ScenePass<'_> {
                 1,
             );
         }
-        self.gpu.queue.submit([encoder.finish()]);
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.gpu.queue.submit([encoder.finish()]);
+        }
         self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
@@ -1117,7 +1123,10 @@ impl ScenePass<'_> {
         });
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         encoder.copy_buffer_to_buffer(&self.validation, 0, &readback, 0, 4);
-        self.gpu.queue.submit([encoder.finish()]);
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.gpu.queue.submit([encoder.finish()]);
+        }
         let (send, receive) = std::sync::mpsc::channel();
         readback
             .slice(..)
@@ -1339,6 +1348,7 @@ impl GpuContext {
         scene: &DrawScene,
         working: WorkingSpace,
     ) -> Result<ScenePass<'_>, GpuError> {
+        let _measure = kronello_render::measure_execution_stage("gpu_scene_preparation_host");
         let scope = self.render_scope()?;
         size.validate()?;
         scene.validate()?;

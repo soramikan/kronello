@@ -450,6 +450,7 @@ impl GpuContext {
     /// Software adapters (WARP / llvmpipe) compile shaders inside the first
     /// submission, so the bound must cover cold JIT on loaded CI runners.
     pub fn wait(&self) -> Result<(), GpuError> {
+        let _measure = kronello_render::measure_execution_stage("gpu_completion_wait");
         self.device
             .poll(wgpu::PollType::Wait {
                 submission_index: None,

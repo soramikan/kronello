@@ -184,6 +184,8 @@
 | [0156](0156-bounded-persistent-hardware-cursor.md) | 有界圧縮demuxと永続hardware cursor | 採用 | 2026-10-11 |
 | [0157](0157-local-coverage-and-last-consumer-surfaces.md) | 保守的な局所coverage面と最終consumerでの解放 | 採用 | 2026-10-11 |
 
+| [0158](0158-scoped-export-execution-measurements.md) | 固定workerの有界な工程観測 | 採用（PERF-006受け入れ進行中） | 2026-10-12 |
+
 ## 追加と変更の規則
 
 - 新しい決定は次の番号で追加する。[0000-template.md](0000-template.md) を複製して使う。

@@ -22,6 +22,11 @@ pub use assets::*;
 pub use audio::*;
 pub use audio_cache::*;
 pub use export::*;
+pub use kronello_render::{
+    ExecutionDiagnostics as ExportDiagnostics,
+    ExecutionDiagnosticsCollector as ExportDiagnosticsCollector,
+    ExecutionStageMeasurement as ExportStageMeasurement, ExecutionStageTimer as ExportStageTimer,
+};
 pub use proxy::*;
 pub use video::*;
 pub use video_seek::{VideoSeekIndexLimits, VideoSeekIndexStats};

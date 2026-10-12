@@ -256,6 +256,7 @@ impl MediaRuntime {
         hdr: Option<kronello_render::HdrSettings>,
         reverse_sampling: bool,
     ) -> Result<(DecodedVideoFrame, VideoColorPolicy, bool), MediaError> {
+        let _measure = kronello_render::measure_execution_stage("video_decode_prepare");
         let timing = std::env::var_os("KRONELLO_MEDIA_TIMING").is_some();
         let t0 = timing.then(std::time::Instant::now);
         self.resolve_verified(asset, project_path)?;
@@ -1532,8 +1533,10 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
+        let resolve = kronello_render::measure_execution_stage("dag_media_resolution");
         let resolved =
             resolve_dag_media_in(dag, self.base.project_path, &mut self.session.borrow_mut())?;
+        drop(resolve);
         self.base
             .backend
             .execute_with_inputs(&resolved.dag, cache, &resolved.input_identities)
@@ -1544,8 +1547,11 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<Vec<[f32; 4]>, RenderError> {
         let _scope = self.begin_observation_scope()?;
+        let resolve = kronello_render::measure_execution_stage("dag_media_resolution");
         let resolved =
             resolve_dag_media_in(dag, self.base.project_path, &mut self.session.borrow_mut())?;
+        drop(resolve);
+        let _execution = kronello_render::measure_execution_stage("backend_linear_execution");
         self.base.backend.execute_linear_with_inputs(
             &resolved.dag,
             cache,

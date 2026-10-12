@@ -4,8 +4,9 @@ use kronello_audio::{AudioSourceMode, ClippingPolicy};
 use kronello_media::*;
 use kronello_model::*;
 use kronello_render::*;
-use kronello_time::{FrameRate, SampleRate, Time, TimeRange};
+use kronello_time::{FrameRate, Time, TimeRange};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::{cell::Cell, path::PathBuf, time::Instant};
 
 struct PatternBackend(Cell<u64>);
@@ -58,24 +59,15 @@ fn main() {
             if filter.as_ref().is_some_and(|f| f != &case) {
                 continue;
             }
-            let sequence = Sequence {
-                id: SequenceId::new(),
-                extent: DesignExtent::new(size[0] as f64, size[1] as f64).unwrap(),
-                frame_rate: FrameRate::new(24, 1).unwrap(),
-                audio_rate: SampleRate::HZ_48000,
-                working_space: ColorSpace::LinearRec709,
-                tracks: vec![],
-                transitions: vec![],
-                markers: vec![],
-                work_area: None,
-                targets: None,
+            let mut project: Project =
+                serde_json::from_str(include_str!("../../../examples/perf-codec.project.json"))
+                    .unwrap();
+            let DocumentObject::Known(sequence) = &mut project.sequences[0] else {
+                panic!("fixed sequence must be known")
             };
+            sequence.extent = DesignExtent::new(size[0] as f64, size[1] as f64).unwrap();
             let target = RenderTarget::Sequence {
                 sequence: sequence.id,
-            };
-            let project = Project {
-                sequences: vec![DocumentObject::Known(sequence)],
-                ..Project::default()
             };
             let render =
                 RenderSnapshot::for_target(&project, target, 0, RenderProfile::default()).unwrap();
@@ -130,6 +122,8 @@ fn main() {
                     "iteration":iteration,"ms":ms,"output":output,
                     "encoded_sha256":content_hash(&output).unwrap(),
                     "backend_calls":backend.0.get(),"checkpoints":checkpoints,
+                    "render_snapshot_hash":report.render_snapshot_hash,
+                    "export_snapshot_hash":report.export_snapshot_hash,
                     "probe":report.probe,"streaming":report.streaming,
                     "outputs":report.outputs,"sample_range":report.sample_range
                 }));
@@ -145,6 +139,9 @@ fn main() {
         }
     }
     println!("{}", serde_json::to_string_pretty(&json!({
+        "schema_version":2,
+        "binary_sha256":content_hash(&std::env::current_exe().unwrap()).unwrap(),
+        "fixture_sha256":format!("{:x}", Sha256::digest(include_bytes!("../../../examples/perf-codec.project.json"))),
         "quiet_host":false,"frame_count":12,"time_base":"1/24",
         "timed_scope":"synthetic tile generation, audio encode, video encode, mux, validation and publication; runtime load and hashes excluded",
         "capabilities":runtime.capabilities(),"cases":cases

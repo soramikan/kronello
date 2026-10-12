@@ -1477,6 +1477,7 @@ pub fn build_render_dag_with_cache(
     region: OutputRegion,
     cache: &mut crate::RenderCache,
 ) -> Result<RenderDag, RenderError> {
+    let _measure = crate::measure_execution_stage("render_dag_build");
     use crate::PixelBounds;
     let mut dag = build_unpadded_dag(scene, profile, region, cache)?;
     // FX-006: a corner pin warps the incoming surface's own corner rectangle

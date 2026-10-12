@@ -29,6 +29,7 @@ pub(super) struct Config {
     pub bundles: usize,
     pub duration: Rational,
     pub legs: Vec<VideoLeg>,
+    pub diagnostics: crate::ExportDiagnosticsCollector,
 }
 pub(super) type Bundle = Vec<Vec<u8>>;
 pub(super) struct ResultData {
@@ -56,9 +57,11 @@ pub(super) struct Producer {
     sender: SyncSender<Command>,
     events: Receiver<Event>,
     free: Vec<Bundle>,
+    diagnostics: crate::ExportDiagnosticsCollector,
 }
 impl Producer {
     pub fn acquire(&mut self) -> Result<Bundle, MediaError> {
+        let _wait = self.diagnostics.time("pipeline_buffer_acquire");
         if let Some(bundle) = self.free.pop() {
             return Ok(bundle);
         }
@@ -71,6 +74,7 @@ impl Producer {
         }
     }
     fn send(&mut self, command: Command, reason: &str) -> Result<(), MediaError> {
+        let _wait = self.diagnostics.time("pipeline_submit_wait");
         if self.sender.send(command).is_ok() {
             return Ok(());
         }
@@ -129,6 +133,7 @@ pub(super) fn run<T>(
             "video pipeline bundle budget".into(),
         ));
     }
+    let diagnostics = config.diagnostics.clone();
     let mut free = Vec::with_capacity(config.bundles);
     for _ in 0..config.bundles {
         let mut bundle = Vec::with_capacity(config.legs.len());
@@ -141,6 +146,10 @@ pub(super) fn run<T>(
         }
         free.push(bundle);
     }
+    diagnostics.peak_payload(
+        "video_bundles",
+        free.iter().flatten().map(|b| b.len() as u64).sum(),
+    );
     let (sender, commands) = sync_channel(1);
     let (events_sender, events) = channel();
     std::thread::scope(|scope| {
@@ -153,8 +162,10 @@ pub(super) fn run<T>(
             sender,
             events,
             free,
+            diagnostics: diagnostics.clone(),
         };
         let result = (|| {
+            let ready = diagnostics.time("pipeline_encoder_initialization_wait");
             match producer.events.recv() {
                 Ok(Event::Ready) => {}
                 Ok(Event::Finished(Err(error))) => return Err(error),
@@ -164,6 +175,7 @@ pub(super) fn run<T>(
                     ));
                 }
             }
+            drop(ready);
             let output = produce(&mut producer, checkpoint)?;
             let result = producer.finish(checkpoint)?;
             Ok((output, result))
@@ -200,6 +212,7 @@ fn consume(
     commands: &Receiver<Command>,
     events: &Sender<Event>,
 ) -> Result<ResultData, MediaError> {
+    let _diagnostic_scope = config.diagnostics.activate();
     // Open a separate runtime from the exact selected directory. Neither its
     // Rc nor the native shim's mutable error buffer is shared with rendering.
     let runtime = MediaRuntime::load_directory(
@@ -283,7 +296,10 @@ fn consume(
     events.send(Event::Ready).map_err(|_| stopped())?;
     let mut delivered = 0_usize;
     let mut final_bundle = loop {
-        match commands.recv().map_err(|_| stopped())? {
+        let wait = config.diagnostics.time("pipeline_consumer_input_wait");
+        let command = commands.recv().map_err(|_| stopped())?;
+        drop(wait);
+        match command {
             Command::Frame { bundle, tick, span } => {
                 if span <= 0 || delivered >= config.frames {
                     return Err(MediaError::Encode(
@@ -305,8 +321,13 @@ fn consume(
                 }
                 for (sink, bytes) in sinks.iter_mut().zip(&bundle) {
                     match sink {
-                        Some(Sink::Color { encoder, .. }) => encoder.frame(bytes, tick, span)?,
+                        Some(Sink::Color { encoder, .. }) => {
+                            let _encode = config.diagnostics.time("native_video_conversion_encode");
+                            encoder.frame(bytes, tick, span)?;
+                            config.diagnostics.count("video_encoder_frames", 1);
+                        }
                         Some(Sink::Gif { encoder, spool, .. }) => {
+                            let _gif = config.diagnostics.time("gif_palette_spool");
                             encoder.frame(bytes)?;
                             spool.write_all(bytes)?;
                         }
@@ -343,7 +364,9 @@ fn consume(
                 hardware,
                 stride,
             }) => {
+                let flush = config.diagnostics.time("video_encoder_flush");
                 encoder.finish()?;
+                drop(flush);
                 let pixel_format = encoder.pixel_format.clone();
                 let converted = encoder
                     .frame_size
@@ -455,6 +478,7 @@ mod tests {
     use super::*;
     fn config(stage: &Path, output: &Path, frames: usize, profiles: &[MovieProfile]) -> Config {
         Config {
+            diagnostics: crate::ExportDiagnosticsCollector::default(),
             capabilities: MediaRuntime::load().unwrap().capabilities().clone(),
             stage: stage.into(),
             pixels: [64, 64],

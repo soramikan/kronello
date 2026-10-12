@@ -200,3 +200,7 @@ plugin のいずれか 1 つの payload を持ち、plugin ジョブは render s
 - helper プロセスだけが plugin ABI を `dlopen` する。service・worker 自身・
   render 経路は bundle をロードしない。helper 解決・timeout・protocol の
   契約は [audio-000](audio-000.md#audio-011-vst3--au-プラグインホスティングの信頼境界) を参照。
+
+## 書き出し工程の任意観測（PERF-006）
+
+[ADR-0158](../adr/0158-scoped-export-execution-measurements.md)の実行policyである`KRONELLO_EXPORT_DIAGNOSTICS=1`を指定したworkerは、固定名の工程/counterを実行所有で集計し、job directoryの`performance-attempt-N.json`へ記録する。診断の失敗で確定済み成果物を失敗へ戻さない。JobStore clone間の成功した明示write transactionを計数し、heartbeat/checkpoint、別processのsubmit/cancel、read-only/rollbackを区別する。診断の有界性と製品report/receiptのframe数比例保持は別の問題で、後者はPERF-013の未受け入れ範囲。
