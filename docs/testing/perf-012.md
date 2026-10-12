@@ -30,6 +30,15 @@ poolの最大managed payloadは各3,604,484bytes。全decoded画素/PCM、PTS/DT
 
 修正後の固定binary `1f05c4382d8400f22b87883c50ab8104f9ab0c26ae0bcd22acb99b2213a034d4`で4K・3 samplesを交互3pairs再測定した（`target/perf-012/fixed-samples3/evidence.json`）。全decoded bits/PTS/layout/chapters/packet/file bytesが一致し、後続worker p50は2584.5→2511.7ms、p95は2669.2→2632.3msだった。検証/buildとの並行を含むため壁時計の一般保証としない。
 
-- 持続処理/RSSの比較を広げる。
 - GPU/CPU色変換の重なりは現行の同期tile境界とnative encode consumerを区別して工程実測から判断する。新しいasync tile queueは未採用であり、poolだけでCPU packingとの重なりを保証しない。
 - ADRと現在の設計、全workspace Clippy/testsの結果を確認し、受け入れ前にdoneにしない。
+
+## 持続処理・CPU・I/O・保持量
+
+同じ固定sourceの4K・24framesを交互3pairsで完走した（`target/perf-012/sustained-24/evidence.json`）。before=`284b2e17…`、after=`1f05c438…`、disk persistence無効、全decoded pixels/PCM・PTS/layout/chapters/packet/file bytes一致。24frames合計のreadback bytesは1,592,528,640、回数は1920で不変、waitは1920→960。各afterでstaging allocation97/reuse1823、最大managed payload3,604,484bytes。異なるrowサイズによるidle退避がframe間でも生じるので、短い1frameの5 allocationを長いexport全体の定数と主張しない。
+
+後続worker p50は11,034.5→10,738.6ms、p95は11,056.5→10,746.0ms。GPU host完了待ち合計は約966〜976→667〜675ms、CPU出力色変換は約1613〜1616→1628msだった。色変換は同じproducerで各tileの検証済みVecを受け取ってから行うため、同tileのGPU待機とpackingは重ならない。別threadのnative encodeとの重なりは従来の二組のframe bundleが担う。poolの寿命規則だけで新しいpacking overlapを導入したと扱わない。
+
+CPU/I/Oの観測方法は[PERF-011](perf-011.md)と同じ。最後のworker CPU観測はbefore約16.39〜16.41秒、after約16.22〜16.39秒、kernel disk write約57〜60MB。frame12以降のRSS観測範囲はbefore約800〜815MB、after約806〜819MB（初回afterは約808〜823MB）。これは限られた24frameの観測で、長尺のRSS保証とは区別する。pool上限は貸出/idleを含む実descriptorの試験で別に確認した。
+
+packingは約1.6秒であり削減対象が残るが、status検証後の同期tileを先に進めるasync queueは追加せず、数値契約を含むGPU packing/encoder inputの比較をPERF-014へ引き継ぐ。ここでの採用はwait統合と完了済みbufferの有界再利用である。全計画の後段を完了した意味ではない。

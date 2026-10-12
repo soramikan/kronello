@@ -6,6 +6,7 @@ Only the explicit fresh state roots created here are inspected or canceled.
 """
 import argparse
 from contextlib import closing
+import ctypes
 from fractions import Fraction
 import hashlib
 import json
@@ -47,12 +48,44 @@ def read_status(state, job):
             return json.loads(rows.fetchone()[0])
 
 
-def rss(pid):
+class DarwinUsage(ctypes.Structure):
+    # RUSAGE_INFO_V2, sys/resource.h in the host SDK. CPU times are Mach
+    # absolute ticks; convert with the host's mach_timebase_info, not 1:1 ns.
+    _fields_ = [("uuid", ctypes.c_uint8 * 16), ("values", ctypes.c_uint64 * 18)]
+
+
+class MachTimebase(ctypes.Structure):
+    _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
+
+
+if platform.system() == "Darwin":
+    PROC = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+    PROC.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+    PROC.proc_pid_rusage.restype = ctypes.c_int
+    SYSTEM = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+    SYSTEM.mach_timebase_info.argtypes = [ctypes.POINTER(MachTimebase)]
+    SYSTEM.mach_timebase_info.restype = ctypes.c_int
+    TIMEBASE = MachTimebase()
+    if SYSTEM.mach_timebase_info(ctypes.byref(TIMEBASE)) or not TIMEBASE.denom:
+        raise RuntimeError("could not obtain Mach CPU timebase")
+
+
+def process_usage(pid):
+    if platform.system() == "Darwin":
+        info = DarwinUsage()
+        if PROC.proc_pid_rusage(pid, 2, ctypes.byref(info)):
+            return None
+        values = info.values
+        return {"method": "proc_pid_rusage_v2", "process_uuid": bytes(info.uuid).hex(),
+                "process_start_ticks": values[8],
+                "rss_bytes": values[6], "physical_footprint_bytes": values[7],
+                "cpu_ns": (values[0] + values[1]) * TIMEBASE.numer // TIMEBASE.denom,
+                "disk_read_bytes": values[16], "disk_write_bytes": values[17]}
     if os.name != "posix":
         return None
     result = subprocess.run(["ps", "-p", str(pid), "-o", "rss="],
                             capture_output=True, text=True, timeout=5)
-    return int(result.stdout.strip()) * 1024 if result.stdout.strip() else None
+    return {"method": "ps_rss", "rss_bytes": int(result.stdout.strip()) * 1024} if result.stdout.strip() else None
 
 
 def independent_oracle(path, ffmpeg, ffprobe):
@@ -132,7 +165,7 @@ def semantic_streams(oracle):
     return result
 
 
-def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None, audio_spool_cache=None, raster_cache=True):
+def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprobe, diagnostics=True, progress_ms=None, audio_spool_cache=None, raster_cache=True, verify_outputs=True):
     for source in case.get("sources", []):
         if digest(source["path"]) != source["sha256"]:
             raise RuntimeError(f"fixture hash mismatch: {source['path']}")
@@ -170,6 +203,7 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
     max_rss = 0
     observed = []
     rss_windows = {}
+    usage_last = None
     next_rss = start
     try:
         while True:
@@ -179,18 +213,22 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
             if not observed or observed[-1]["completed"] != record["completed_frames"]:
                 observed.append({"elapsed_ms": (now - start) * 1000,
                                  "completed": record["completed_frames"]})
-            if record["status"] not in ("queued", "running"):
-                break
             if now - start > timeout:
                 raise TimeoutError(f"worker deadline exceeded: {job}")
-            if now >= next_rss:
-                value = rss(pid) if pid else None
-                if value is not None:
+            terminal_record = record["status"] not in ("queued", "running")
+            if now >= next_rss or terminal_record:
+                usage = process_usage(pid) if pid else None
+                if usage is not None:
+                    if usage_last and any(usage.get(key) != usage_last.get(key)
+                                          for key in ("process_uuid", "process_start_ticks")):
+                        raise RuntimeError("worker PID was reused during observation")
+                    usage_last = {"elapsed_ms": (now - start) * 1000, **usage}
+                    value = usage["rss_bytes"]
                     max_rss = max(max_rss, value)
                     # Fixed progress buckets keep long-run observation bounded.
                     bucket = min(32, record["completed_frames"] * 32 //
                                  max(1, record["total_frames"]))
-                    point = {"elapsed_ms": (now - start) * 1000, "bytes": value,
+                    point = {**usage_last, "bytes": value,
                              "completed": record["completed_frames"]}
                     window = rss_windows.setdefault(bucket, {
                         "first": point, "last": point, "min_bytes": value,
@@ -199,6 +237,8 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
                                   max_bytes=max(window["max_bytes"], value),
                                   samples=window["samples"] + 1)
                 next_rss = now + 0.1
+            if terminal_record:
+                break
             time.sleep(0.02)
         terminal = call(binary, backend, env, "job.get", job=job)
         succeeded_ms = (time.monotonic() - start) * 1000
@@ -227,7 +267,9 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
                 "worker": worker, "report": report, "progress": observed,
                 "sampled_worker_peak_rss_bytes": max_rss or None,
                 "sampled_worker_rss_progress_windows": rss_windows,
-                "oracles": [independent_oracle(p, ffmpeg, ffprobe) for p in paths]}
+                "sampled_worker_usage_last": usage_last,
+                "output_paths": [str(p) for p in paths],
+                "oracles": [independent_oracle(p, ffmpeg, ffprobe) for p in paths] if verify_outputs else []}
     except BaseException:
         call(binary, backend, env, "job.cancel", job=job)
         raise
@@ -305,7 +347,8 @@ def main():
                 "raster_cache_enabled": not args.disable_raster_cache,
                 "notes": ["Each trial launches a fresh real worker; first/subsequent trials are not a warm persistent GPU process.",
                           "Wall includes CLI freeze/submit, queue, worker and terminal result loading; independent oracle excluded.",
-                          "RSS is sampled from the worker every 100ms, not kernel maximum RSS, payload or GPU memory.",
+                          "Resources are sampled every 100ms and at terminal observation. Darwin uses proc_pid_rusage v2 with Mach timebase conversion. Other POSIX hosts provide RSS only.",
+                          "CPU and kernel disk I/O are last observations, potentially before worker exit, not exact totals. Cached file reads need not appear as disk I/O. RSS is not kernel peak, payload or GPU memory.",
                           "Stage times overlap; native conversion/send/receive/packet-write and GPU host preparation/submit/wait are separately observed when supported by this binary."]}
     receipt = args.output / "evidence.json"
     for pair in range(args.pairs):

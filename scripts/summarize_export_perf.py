@@ -12,7 +12,7 @@ def compact(value, key=""):
     if isinstance(value, dict):
         return {name: compact(item, name) for name, item in value.items()}
     if isinstance(value, list):
-        if len(value) > 64 or (key == "frames" and len(value) > 1) or (key == "first_samples_us" and len(value) > 8):
+        if len(value) > 64 or (key in ("frames", "packets") and len(value) > 1) or (key == "first_samples_us" and len(value) > 8):
             encoded = canonical(value)
             result = {"count": len(value), "canonical_bytes": len(encoded),
                     "canonical_sha256": hashlib.sha256(encoded).hexdigest(),

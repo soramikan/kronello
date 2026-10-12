@@ -2089,6 +2089,164 @@
           ]
         }
       ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/evidence.json",
+      "raw_sha256": "a63f4c52a74863f15c5e3e0ee8195bbeebb867bd97d0e2ac761e04e54e26d951",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/0-before/movie.mov",
+              "encoded_sha256": "17d431755a7e2184937230b8aee7f4f6609172fd46c8da76a63e5b6625e39514",
+              "packet_metadata_sha256": "9d87cdcf750cd7cb3246de010c8348ba69a65830cefe08cda2afefb94bf62c9e",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/0-before/audio.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/0-after/movie.mov",
+              "encoded_sha256": "17d431755a7e2184937230b8aee7f4f6609172fd46c8da76a63e5b6625e39514",
+              "packet_metadata_sha256": "9d87cdcf750cd7cb3246de010c8348ba69a65830cefe08cda2afefb94bf62c9e",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/0-after/audio.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/1-after/movie.mov",
+              "encoded_sha256": "17d431755a7e2184937230b8aee7f4f6609172fd46c8da76a63e5b6625e39514",
+              "packet_metadata_sha256": "9d87cdcf750cd7cb3246de010c8348ba69a65830cefe08cda2afefb94bf62c9e",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/1-after/audio.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/1-before/movie.mov",
+              "encoded_sha256": "17d431755a7e2184937230b8aee7f4f6609172fd46c8da76a63e5b6625e39514",
+              "packet_metadata_sha256": "9d87cdcf750cd7cb3246de010c8348ba69a65830cefe08cda2afefb94bf62c9e",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/1-before/audio.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/2-before/movie.mov",
+              "encoded_sha256": "17d431755a7e2184937230b8aee7f4f6609172fd46c8da76a63e5b6625e39514",
+              "packet_metadata_sha256": "9d87cdcf750cd7cb3246de010c8348ba69a65830cefe08cda2afefb94bf62c9e",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/2-before/audio.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/2-after/movie.mov",
+              "encoded_sha256": "17d431755a7e2184937230b8aee7f4f6609172fd46c8da76a63e5b6625e39514",
+              "packet_metadata_sha256": "9d87cdcf750cd7cb3246de010c8348ba69a65830cefe08cda2afefb94bf62c9e",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/audio-video-resources/2-after/audio.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

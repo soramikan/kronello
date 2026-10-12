@@ -729,6 +729,110 @@
           ]
         }
       ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/evidence.json",
+      "raw_sha256": "b538195618cb5e8a947320250955ab477993db64181ba03a060a1568ad846c01",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/0-before/movie.mov",
+              "encoded_sha256": "7d6c496883e0da2e2a89b14e3caded5a6bdfada6751ccf1419d979bf850d63fe",
+              "packet_metadata_sha256": "9910a73930dc6381fbaa4b1ad95a646b6bd0593f39aec3cd800c1a72751728fa",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/0-after/movie.mov",
+              "encoded_sha256": "7d6c496883e0da2e2a89b14e3caded5a6bdfada6751ccf1419d979bf850d63fe",
+              "packet_metadata_sha256": "9910a73930dc6381fbaa4b1ad95a646b6bd0593f39aec3cd800c1a72751728fa",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/1-after/movie.mov",
+              "encoded_sha256": "7d6c496883e0da2e2a89b14e3caded5a6bdfada6751ccf1419d979bf850d63fe",
+              "packet_metadata_sha256": "9910a73930dc6381fbaa4b1ad95a646b6bd0593f39aec3cd800c1a72751728fa",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/1-before/movie.mov",
+              "encoded_sha256": "7d6c496883e0da2e2a89b14e3caded5a6bdfada6751ccf1419d979bf850d63fe",
+              "packet_metadata_sha256": "9910a73930dc6381fbaa4b1ad95a646b6bd0593f39aec3cd800c1a72751728fa",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/2-before/movie.mov",
+              "encoded_sha256": "7d6c496883e0da2e2a89b14e3caded5a6bdfada6751ccf1419d979bf850d63fe",
+              "packet_metadata_sha256": "9910a73930dc6381fbaa4b1ad95a646b6bd0593f39aec3cd800c1a72751728fa",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-012/sustained-24/2-after/movie.mov",
+              "encoded_sha256": "7d6c496883e0da2e2a89b14e3caded5a6bdfada6751ccf1419d979bf850d63fe",
+              "packet_metadata_sha256": "9910a73930dc6381fbaa4b1ad95a646b6bd0593f39aec3cd800c1a72751728fa",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                24,
+                47
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

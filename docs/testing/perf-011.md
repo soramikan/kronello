@@ -39,10 +39,7 @@ cache単体2件ではstage cleanup後の再利用、参照PCM破損の拒否/hea
 
 ## 残る受け入れ
 
-- 圧縮source比較とcold/warm・CPU/I/O競合を評価してcache採否/対応範囲を確定する。
-- cache index/header欠落・破損、eviction、cancel、途中publication回収、runtime変更の追加試験を完了する。
-- layout/audio mode/gainの異なるgroupで非共有と各sampleを実worker検証する。
-- ADR/現在の設計、fmt・全workspace Clippy/testsを完了する。すべての受け入れ前にbacklogをdoneにしない。
+- GPU寿命修正後の全workspace testsの終了結果を確認する。fmt・全workspace Clippy・生成API整合は成功した。すべての受け入れ前にbacklogをdoneにしない。
 
 ## 追加境界検証
 
@@ -51,3 +48,15 @@ cache unit3件で欠落/破損/oversized header/index、取消、途中publicati
 layout/mode/gainの実worker比較をさらに3pairsずつ追加した。5本のstereo/mono duplicate/5.1 duplicateはmix240,000→144,000frames・3groups、document/silence/explicit half duplicate/explicit unityは240,000→192,000frames・4groups。全sample/layout/PTS/packet/hashが一致した。単体silence/group keyテストだけで非共有を主張しない。合計9比較66 successful worker trialsである。
 
 fixtureのmono mask=1は既存APIが正しく拒否したため、実定義MONO=4へ合わせた。schema説明だけが1と誤記されていたのでmodel/project/API schemaとSwift生成hashを修正した。音声単独は映像frames=0へ期待値を合わせ、失敗試行を保存してv3を証拠にする。前sourceで開始したworkspace runは途中のschema差異で停止したため、成功扱いにしない。現sourceのschema generator試験は成功し、GPU変更と合わせた新しいworkspace runを実行中。
+
+## CPU/I/O競合と採否
+
+固定640×360・24frames・長尺WAV sourceから1秒のMOV/FLAC出力を交互3pairs追加した。before=`e188f8ae…`、after=`1f05c438…`。mix96,000→48,000frames、23→12blocks、PCM window read784,384→392,192bytesとなり、全PCM/画素・PTS/layout/priming/chapters/packet/file bytesが一致した。合計10比較72 successful worker trialsである。共有後のmixは約6.0〜6.1ms、decode/spoolは約534〜544ms、private PCM writeは230,784,000bytesで、残る開始前費用はmixよりsource準備が支配的だった。
+
+CPU/ディスクI/O/RSSは100msごととterminal観測時の`proc_pid_rusage_v2`で採取した。CPUのMach tickをhostのtimebase125/3で変換し、0.2秒の実CPU負荷を`getrusage`の差分（約0.195秒）と照合した。取得フィールドは[Appleのrusage実装](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/bsd_kern.c)、時刻単位は[task power実装](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/task.c)とhost SDKの`sys/resource.h`へ対応する。終了前の最終sampleであり、正確なexit totalsやpayloadではない。kernelのdisk readはpage cacheで読んだfile bytesを表さない。
+
+上記の共有後workerはCPU約1.61〜1.63秒、wall約1.39〜1.46秒、kernel disk write約236MB、sampled RSS peak約683〜686MBだった。source検証/PCM spoolと動画codecの費用を含む。短いwall差を一般的な改善率としない。
+
+[競合比較](perf-011-resource-contention.json)では、共有後の同一binaryで4K・24frame動画workerと601秒WAV→短区間FLAC workerを直列/並行に実行した（交互3pairs、計12 workers）。oracleは両worker終了後に実施し、全decoded bits/PTS/packet/file bytesが一致した。後続2試行の両worker完了p50は11,450.5→10,451.6ms、p95は11,462.3→15,641.2ms。通常の音声はCPU約0.75〜0.76秒・kernel write約227MBであり、並行側の最後の試行では動画約15.63秒・音声約1.03秒となった。静穏hostを保証しない探索値なので、p95差を並列化自体の因果と断定しない。
+
+この比較は独立worker間の競合で、同一job内の新しいaudio/video parallel pathの受け入れ証拠ではない。mix重複は共有で除き、反復する長尺圧縮sourceではwindow検証spoolを明示policyで採用する。cold費用と並行試行のばらつきを踏まえ、既定のdisk cacheや同一job内の音声/動画並列化は追加しない。range decodeは未導入であり、resampler/DSP/WSOLA prerollと全authored rangeの検証を原点decodeのまま維持する。
