@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 9 | 1 | 15 | 0 | 25 |
+| M10 | 8 | 1 | 16 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1258,7 +1258,7 @@
 
 ### PERF-006 実worker全工程計測と固定fixture
 
-- 優先度: P0 / 領域: performance / 状態: in_progress
+- 優先度: P0 / 領域: performance / 状態: done
 - 依存: PERF-005
 - 受け入れ条件:
   - 固定fixture・snapshot identity・実行binary hash・runtimeを記録し、既存codec測定本文とraw JSONの不整合を訂正して再採取する
@@ -1268,7 +1268,7 @@
 
 ### PERF-007 書き出し準備済みコンテキストとsample SceneIR共有
 
-- 優先度: P0 / 領域: performance / 状態: planned
+- 優先度: P0 / 領域: performance / 状態: in_progress
 - 依存: PERF-006
 - 受け入れ条件:
   - 同期exportと固定workerが検証済み不変snapshot、静的sequence lowering、canonical/evaluation hash、font/LUT identity、有界意味cache、metadata共通情報を同じコンテキストで保持する

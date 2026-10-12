@@ -1,0 +1,10 @@
+{
+  "evidence_sha256": "537d37ef093e271f50e132277699c099f49556ba47cca39d934087c8fa0f1d47",
+  "binary_sha256": "cd9ef76095725aa1cf38da854140dae00d9519d1bc1708e07afbe14b2b5dbcfc",
+  "job": "35c2cc33-a2c7-4034-b8b8-a7f86a9aa23e",
+  "frame_count": 10000,
+  "result_canonical_sha256": "f8cb1e16a522d37aa17df68151a791537a6f80b6be445c44e0732b40f5623c4d",
+  "recovered_result_identical": true,
+  "no_new_attempt": true,
+  "resume_and_hydrate_ms": 1406.3641249958891
+}

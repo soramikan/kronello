@@ -2546,7 +2546,7 @@
       "priority": "P0",
       "area": "performance",
       "title": "実worker全工程計測と固定fixture",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "PERF-005"
       ],
@@ -2563,7 +2563,7 @@
       "priority": "P0",
       "area": "performance",
       "title": "書き出し準備済みコンテキストとsample SceneIR共有",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         "PERF-006"
       ],

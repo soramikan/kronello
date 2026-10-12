@@ -46,6 +46,8 @@ def main():
     second = deepcopy(first)
     second["id"] = ids["alternate_clip"]
     second["time_map"]["speed"] = rational(2)
+    second["source_in"] = rational(Fraction(1, 4))
+    second["timeline_range"]["end"] = rational(Fraction(3, 4))
     case["document"]["sequences"][0]["tracks"].append({
         "id": ids["alternate_track"], "kind": "video", "clips": [second]})
     save("same-source-independent-speed", case)

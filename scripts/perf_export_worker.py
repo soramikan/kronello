@@ -125,6 +125,7 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
     pid = submitted["worker_pid"]
     max_rss = 0
     observed = []
+    rss_windows = {}
     next_rss = start
     try:
         while True:
@@ -139,7 +140,20 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
             if now - start > timeout:
                 raise TimeoutError(f"worker deadline exceeded: {job}")
             if now >= next_rss:
-                max_rss = max(max_rss, (rss(pid) if pid else None) or 0)
+                value = rss(pid) if pid else None
+                if value is not None:
+                    max_rss = max(max_rss, value)
+                    # Fixed progress buckets keep long-run observation bounded.
+                    bucket = min(32, record["completed_frames"] * 32 //
+                                 max(1, record["total_frames"]))
+                    point = {"elapsed_ms": (now - start) * 1000, "bytes": value,
+                             "completed": record["completed_frames"]}
+                    window = rss_windows.setdefault(bucket, {
+                        "first": point, "last": point, "min_bytes": value,
+                        "max_bytes": value, "samples": 0})
+                    window.update(last=point, min_bytes=min(window["min_bytes"], value),
+                                  max_bytes=max(window["max_bytes"], value),
+                                  samples=window["samples"] + 1)
                 next_rss = now + 0.1
             time.sleep(0.02)
         terminal = call(binary, backend, env, "job.get", job=job)
@@ -168,6 +182,7 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
                 "worker_pid": pid, "job": job,
                 "worker": worker, "report": report, "progress": observed,
                 "sampled_worker_peak_rss_bytes": max_rss or None,
+                "sampled_worker_rss_progress_windows": rss_windows,
                 "oracles": [independent_oracle(p, ffmpeg, ffprobe) for p in paths]}
     except BaseException:
         call(binary, backend, env, "job.cancel", job=job)

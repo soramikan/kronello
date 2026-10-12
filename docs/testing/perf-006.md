@@ -1,6 +1,6 @@
 # PERF-006: 固定workerの追加書き出し計測
 
-2026-10-12着手。`in_progress`。依頼計画の全範囲は[保存した計画](performance-export-plan.md)、PERF-006〜014の受け入れ条件はバックログに登録した。
+2026-10-12受け入れ済み。`done`。依頼計画の全範囲は[保存した計画](performance-export-plan.md)、PERF-006〜014の受け入れ条件はバックログに登録した。
 
 ## 計測基盤
 
@@ -58,21 +58,34 @@ python3 scripts/perf_export_worker.py --before /absolute/path/to/before/kronello
 
 `perf_codec_delivery`は固定`examples/perf-codec.project.json`を読み、実行binaryとコンパイルに使用したfixture bytesのSHA-256、各trialのrender/export snapshot hashを記録するよう変更した。[再採取raw記録](perf-006-codec-fixed.json)。同じRust source/fixtureを二つのbinaryへ固定し、一時workspace側のnative `media.c`だけProRes/DNxを1threadへ戻した。SVT lp=1は両側で維持する。before→after→after→beforeの4batch、6case×9trial×2比較=108 pair（合計216出力）で、全render/export snapshot hash、全decoded native bits/音声layout、全PTS/DTS/duration、sample range/checkpoint/backend call数とencoded bytesが一致した。今回のbefore/after binary SHA-256はそれぞれ`a17d62e27668e18b5837b0b0a105180bfc035f38540a3af782ff4291301218ca`と`d45aca072ab76b2f5f11f85691d3106fb6880b285f2261692602edf743a9346e`で異なる。batch内のcold1/warm8は保存するが、全caseをtrialごとに交互実行した比較ではなく非静穏hostであり、時間差を厳密な因果倍率として採用しない。旧資料は今回の新しい証拠で置換せず、訂正履歴を残す。
 
-## 残る受け入れ
+## 受け入れの範囲
 
-- 全matrixの補正済み計測器と十分な反復数による再採取、異開始点/reverse/HDR/flowの対照、長尺完走・復旧と定常メモリ観測。
-- 全matrixの詳細native/GPU host/wait、spool/window保持量、hash/metadata内訳を最終記録へ反映する。
-- codec A/Bをtrial単位で交互にする追加比較、同一process内cold/warmとfresh workerの分離、十分な反復数のp50/p95、長尺完走/定常RSSの観測。
-- 生成schema/Swift型、fmt、workspace Clippy/test、実Metal・worker取消/復旧・診断無効時の回帰確認。
+基準計測の4条件を確認した。reverse/HDR/flowでの共有identityの対照はPERF-008、変更後の取消/lease応答とDB競合はPERF-009、分割metadataの復旧・メモリ上限はPERF-013で受け入れる。現段階の長尺metadataの増加は改善対象として観測したもので、解消済みとは扱わない。
 
-上記を確認するまでPERF-006をdoneにしない。PERF-007〜014の改善も未受け入れであり、この計測基盤だけで依頼全体を完了と扱わない。
+codec比較は固定identity/異なるbinaryの108 pairで記録不整合を解決した。batch交替なので速度の因果倍率を採用しない。実workerの短尺比較はpair単位の交互実行で別に採取した。
 
 ## 段階的な回帰検証
 
 初版の`cargo fmt --all --check`、workspace Clippy（warnings denied）、workspace testは成功した。通常/Doctest合計1,338 passed、47 ignored、200 suites。外部fixtureのrootを明示し、実Metalと実workerの通常テストも含む。生成schemaとSwift型を更新し、生成checkも通過した。時間精度補正後のdiagnostic unit4件は成功した。初版の全体成功を補正後や後続改善の全体成功と混同せず、受け入れ時に最終ソースで全体を再確認する。
 
-## 最終基準の再採取（進行中）
+## 最終基準の再採取
 
-時間精度補正、native工程分離、GPU host準備/submit/完了待ちとdisk cache保存、音声chunk/window・RGBA・bundleのpayloadを含む固定release binary `cd9ef76095725aa1cf38da854140dae00d9519d1bc1708e07afbe14b2b5dbcfc`で、全8ケースを各18試行で再採取中。stageごとの最初の64個だけを記録し、同一worker内のfirst frameとwarm frame p50/p95をfresh workerのwall p50/p95から分離する。少数sampleのfixture/長尺ケースと実Metal・CPU referenceを混同しない。
+[最終測定記録](perf-006-calibrated.json)は8ケース各18試行（144試行）、異なるsource_in 0/1/4秒・speed 1/2の追加18試行、長尺RSS観測4試行を含む。すべて補正済み固定binary `cd9ef76095725aa1cf38da854140dae00d9519d1bc1708e07afbe14b2b5dbcfc`を両側に用いた再現性検査で、全pairのsnapshot identity・全decoded bits/layout/PTS/DTS/duration・encoded bytesが一致した。rawはtarget内、チェックインした要約は省略配列の正確なcount/byte長/digestと端点を残す。`summarize_export_perf.py`で再生成できる。
 
-capabilitiesの繰り返されるcommand registry全文はcanonical SHA-256と必要なruntime/backend/versionへ整理した。測定trialは変更せず、schemaとruntimeのidentityを残す。
+| ケース | 後続fresh worker p50/p95 ms（before側） |
+|---|---:|
+| 4K 0 samples | 1,906.4 / 2,117.7 |
+| 4K 3 samples | 5,746.1 / 5,984.4 |
+| 4K 8 samples | 12,432.1 / 12,727.1 |
+| 3,000 clip＋日本語字幕/blur | 19,558.9 / 19,734.5 |
+| 1万frame GIF、CPU reference | 18,696.3 / 19,999.3 |
+
+stage最初の64標本で同一worker内のfirst frameとwarm frameを分離した。3,000 clipケースのあるtrialではfirst 1,525,059 us、後続frame p50/p95 1,586,059/1,650,304 us。1万frame CPUケースではfirst 257 us、後続最初の63frame 102/147 us。1frameケースに同一workerのwarm分布は存在しない。hostは非静穏である。
+
+長尺の追加4試行は各100msのRSS標本を最大33個の進捗区間へ集約した。あるtrialの描画25〜28%で約35 MB、50〜53%で約46 MB、75〜78%で約57 MBとなり、metadataが増加した。最後のreceipt生成では約565 MBに達した。GPU転送・cache保持・spool/window・bundleのpayload counterをこのRSSから推定せず、診断の別fieldで記録した。
+
+[1万frameの復旧記録](perf-006-recovery.json)では、この測定専用stateの終了済みjobをrename後/success保存前のinterrupted状態へ戻し、共有`job.resume`で既存receiptを検証した。新attemptなしでsucceededへ戻り、全1万frameを含むresult全体が変更前と一致した。所有権/破損/partial receipt、heartbeat競合の通常テストも最終workspaceで成功した。
+
+nativeのRGBA→YUV・send/receive・packet write・close、GPUのhost準備/submit/fence待機、disk persistence、音声chunk/windowとRGBA/bundleのpayload、buffer返却待ち、worker DB write commit、各output stage bytes、hash/receiptの工程は要約中の診断に残す。GPU executionはhostの実行境界として観測し、device timestampは採取していない。
+
+最終runtime sourceのfmt・workspace Clippy（warnings denied）・workspace testは成功した。1,339 passed、0 failed、47 ignored、200 suites。ログは`/private/tmp/kronello-perf006-workspace-final.log`と`/private/tmp/kronello-perf006-clippy-final.log`。生成schema/Swift checkとbacklog checkも成功した。以後の性能改善はそれぞれ改めて検証する。
