@@ -7,7 +7,7 @@ use crate::JobError;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const MAX_FILES: u64 = 4_000_001;
+pub(crate) const MAX_FILES: u64 = 4_000_001;
 const MAX_LINE: usize = 32768;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -85,7 +85,7 @@ fn walk(
     Ok(())
 }
 pub(crate) fn write(path: &Path, roots: &[PathBuf]) -> Result<ArtifactIndex, JobError> {
-    if roots.is_empty() || roots.len() > 9 {
+    if roots.is_empty() || roots.len() as u64 > MAX_FILES {
         return Err(invalid("publication root budget"));
     }
     let file = fs::OpenOptions::new()
@@ -148,7 +148,7 @@ pub(crate) fn verify(
     if index.version != 2
         || index.roots != roots.len()
         || roots.is_empty()
-        || roots.len() > 9
+        || roots.len() as u64 > index.count
         || index.count == 0
         || index.count > MAX_FILES
         || index.bytes > index.count * MAX_LINE as u64

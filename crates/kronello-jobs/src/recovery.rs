@@ -95,6 +95,50 @@ mod tests {
         );
     }
     #[test]
+    fn indexed_publication_preserves_more_than_nine_roots_and_recovery() {
+        let (temp, store, original) = fixture();
+        let queued = store.resume(&original.id).unwrap();
+        assert!(store.claim(&queued.id).unwrap());
+        let record = store.get(&queued.id).unwrap();
+        let stage = store.staging(&record).unwrap();
+        let roots: Vec<_> = (0..12)
+            .map(|n| {
+                let source = stage.path.join(format!("leg-{n}"));
+                std::fs::write(&source, format!("artifact-{n}")).unwrap();
+                let target = if n == 0 {
+                    record.destination.clone()
+                } else {
+                    temp.path().join(format!("leg-{n}"))
+                };
+                (source, target)
+            })
+            .collect();
+        store
+            .prepare_publication_bundle(&record, &roots, serde_json::json!({"roots":12}))
+            .unwrap();
+        for (source, target) in &roots {
+            publish_path(source, target).unwrap();
+        }
+        store
+            .finish_error(&record.id, &JobError::new("TEST", "after rename"))
+            .unwrap();
+        store
+            .update(&record.id, |r| {
+                r.worker_pid = None;
+                Ok(())
+            })
+            .unwrap();
+        let recovered = store.resume(&record.id).unwrap();
+        assert_eq!(recovered.status, JobStatus::Succeeded);
+        assert_eq!(recovered.result.unwrap()["roots"], 12);
+        for (n, (_, target)) in roots.iter().enumerate() {
+            assert_eq!(
+                std::fs::read(target).unwrap(),
+                format!("artifact-{n}").as_bytes()
+            );
+        }
+    }
+    #[test]
     fn indexed_bundle_rejects_partial_publication_and_changed_metadata() {
         for partial in [true, false] {
             let (temp, store, original) = fixture();
@@ -232,14 +276,24 @@ mod tests {
     }
     #[test]
     fn partial_receipt_without_destination_can_be_discarded_and_retried() {
-        let (_temp, store, record) = fixture();
-        let receipt = store.receipt_path(&record).unwrap();
-        std::fs::write(&receipt, b"{partial").unwrap();
-        let resumed = store.resume(&record.id).unwrap();
-        let _stage = store.staging(&resumed).unwrap();
-        assert_eq!(resumed.attempt, 1);
-        assert!(!receipt.exists());
-        assert!(resumed.publication_hash.is_none());
+        for receipt_exists in [true, false] {
+            let (_temp, store, record) = fixture();
+            let receipt = store.receipt_path(&record).unwrap();
+            if receipt_exists {
+                std::fs::write(&receipt, b"{partial").unwrap();
+            }
+            let index = receipt.with_extension("artifacts.jsonl");
+            std::fs::write(&index, b"partial index").unwrap();
+            let peer = receipt.with_file_name("unrelated.artifacts.jsonl");
+            std::fs::write(&peer, b"keep").unwrap();
+            let resumed = store.resume(&record.id).unwrap();
+            let _stage = store.staging(&resumed).unwrap();
+            assert_eq!(resumed.attempt, 1);
+            assert!(!receipt.exists());
+            assert!(!index.exists());
+            assert_eq!(std::fs::read(peer).unwrap(), b"keep");
+            assert!(resumed.publication_hash.is_none());
+        }
     }
     #[test]
     fn slow_receipt_and_reconcile_validation_leave_peer_heartbeat_free_and_prune_keeps_result() {
@@ -693,10 +747,12 @@ impl JobStore {
             old.attempt = attempt;
             remove_owned(&stage_path(&old)?, &Identity::of(&old))?;
             let receipt = self.receipt_path(&old)?;
-            match std::fs::remove_file(receipt) {
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-                Ok(()) => {}
+            for obsolete in [receipt.with_extension("artifacts.jsonl"), receipt] {
+                match std::fs::remove_file(obsolete) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                    Ok(()) => {}
+                }
             }
         }
         let path = stage_path(record)?;
@@ -782,7 +838,7 @@ impl JobStore {
         result: serde_json::Value,
     ) -> Result<(), JobError> {
         self.input(record)?;
-        if roots.is_empty() || roots.len() > 9 || roots[0].1 != record.destination {
+        if roots.is_empty() || roots[0].1 != record.destination {
             return Err(JobError::new("INVALID_REQUEST", "publication bundle roots"));
         }
         let destinations: Vec<_> = roots.iter().map(|(_, target)| target.clone()).collect();

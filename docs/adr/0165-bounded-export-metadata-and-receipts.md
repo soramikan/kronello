@@ -1,6 +1,6 @@
 # ADR-0165: 長尺frame metadataとpublication receiptの有界化
 
-- 状態: 部分置換（[ADR-0166](0166-bounded-sequence-metadata.md): image sequence除外の拡張。movie/GIF・receipt・muxの決定は維持）
+- 状態: 部分置換（[ADR-0166](0166-bounded-sequence-metadata.md): image sequence除外の拡張。[ADR-0168](0168-publication-root-compatibility.md): publication root群の独立上限。その他movie/GIF・receipt・muxの決定は維持）
 - 日付: 2026-10-12
 - 対象: PERF-013
 - 後続: ADR-0079、ADR-0133
@@ -28,3 +28,5 @@ private stageの既取得probeを渡してRust側の重複open/検査を除く�
 ## 受け入れ前に必要な証拠
 
 短い旧reportとの全metadata復元比較、境界を跨ぐページと破損拒否、長尺の完走とwriter/reader/receipt/queryの保持量、旧receipt復旧、取消/kill/lease喪失/途中確定の回収、mux全packet/時刻/chaptersの一致を確認する。movie/GIFの共通header/chunk、root receipt/index、page Queryは実装済みだが、image sequenceとmux/追加復旧検証が残る。全体の受け入れ済みとは扱わず、範囲ごとの証拠を[PERF-013](../testing/perf-013.md)で追跡する。
+
+publication root群の独立上限は[ADR-0168](0168-publication-root-compatibility.md)で部分置換した。

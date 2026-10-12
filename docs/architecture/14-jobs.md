@@ -209,7 +209,7 @@ plugin のいずれか 1 つの payload を持ち、plugin ジョブは render s
 
 [ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)に従い、movie/GIF reportはinline64件/1MiBを超えると共通headerと64frames/4MiBのchunkへ移り、descriptorだけをstatus結果へ返す。`job.frames`はjob/attempt/snapshot/range/rate/countに結び付いた64件/16MiB以内のread-only Queryで、header/indexを認証し必要payloadだけを復元する。publication/recoveryの全体検証は全chunkを読む。旧inline receiptの読み出し・復旧は維持する。
 
-出力legとmetadata sidecarは同じ固定上限9rootのpublication bundleへ入れ、artifact entryを外部indexへ逐次書く。root receiptはそのhash/bytes/countを持つ。全rootの確定前fenceとNOREPLACE renameを維持し、partial set・破損・extra fileを拒否する。index/receiptはinput/logのprune後も結果とともに保持する。
+出力legとmetadata sidecarは同じpublication bundleへ入れ、artifact entryを外部indexへ逐次書く。root receiptはそのhash/bytes/countを持つ。全rootの確定前fenceとNOREPLACE renameを維持し、partial set・破損・extra fileを拒否する。index/receiptはinput/logのprune後も結果とともに保持する。[ADR-0168](../adr/0168-publication-root-compatibility.md)に従い、非空root数の上限は既存artifact file count budgetから導き、独立した9root制限を課さない。新attemptのstaging準備時には旧attemptのindexとreceiptを両方回収する。
 
 [ADR-0166](../adr/0166-bounded-sequence-metadata.md)に従い、長い画像連番も同じmanifestへmetadataとnumeric/display file参照を保存する。version2の`sequence.json`はdescriptorを持ち、`job.frames.files`で対応する生成名/bytes/hashを返す。directory内のmanifestを最終pathへrelocateしてreceiptをhashし、primary directoryと一緒に公開する。publication/recoveryは各画素fileも逐次検証し、短いversion1と旧receiptも読める。
 

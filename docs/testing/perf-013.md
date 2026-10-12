@@ -123,7 +123,7 @@ python3 scripts/perf_export_worker.py \
 
 | 条件 | 実装・実行証拠 | 判定範囲 |
 |---|---|---|
-| 共通header・固定上限chunk・小さいroot receipt | `frame_manifest.rs`の8MiB header/64件・4MiB chunk、`artifact_index.rs`の9root/32KiB entry、10,000frame GIF/連番完走とreceipt/chunk保持計数 | 新writerは全frame/全artifactのVecを保持しない。旧version1の全量読込は互換例外 |
+| 共通header・固定上限chunk・小さいroot receipt | `frame_manifest.rs`の8MiB header/64件・4MiB chunk、`artifact_index.rs`の非空root/file count budget・32KiB entry、10,000frame GIF/連番完走とreceipt/chunk保持計数 | 新writerは全frame/全artifactのVecを保持しない。旧version1の全量読込は互換例外 |
 | status summaryと詳細page | 同じregistryの`job.frames`、CLI境界/prune試験、1,000/10,000frameの先頭・末尾64件Queryのkernel RSS | pageは64件/16MiB、header/index全体と必要chunk payloadを認証。未参照payloadの検査は全体verifyで行う |
 | 元metadata・画素・有理数時刻の復元 | movie/GIFと画像連番の交互A/B、全frame semantic digest、全numeric/display payload hash、negative/NTSC/overflow grid試験 | execution observationだけを除外し、数値・time・snapshot/lock/意味版を比較。movieでは全packet/PTS/layoutも独立検証 |
 | chunk欠落・破損・順序違い | reader単体の完全再hashした順序違いを含む3mode、CLIのroot破損、rename後の新movie/sequence chunk破損 | writerが未完了directoryを回収し、page/recoveryが不正artifactを拒否 |
@@ -138,3 +138,9 @@ wire修正後のworkspace実行は、FFI外部出力のnative bundle検出が約
 ## 最終受け入れ
 
 修正後のfmt・全workspace/all-targets Clippy・全workspace test（`--locked --no-fail-fast`）が成功した。testは201 suites・1379 passed・0 failed・50 ignored、`target/perf-013-bundle-fixed-workspace-tests.log`、exit0、SHA-256 `fedcc38fc075b4057ae1cac8f1da2cc7dfdc381c05e1f29c1fca8c26fc59c257`。ignored全機能の保証ではなく、PERF-013固有の全metadata/packet/画素比較、破損、旧形式、取消/kill/reconciliation、page/prune/RSSは本文の明示実行を根拠にする。途中の失敗ログをこの成功へ置換しない。本文の「進行中/残件」は各初期時点の記録であり、この最終gateをもってPERF-013を受け入れる。PERF-014は未完了であり、全依頼を完了した意味ではない。
+
+## PR #21のreview修正
+
+独立した9root制限をwriter・reader・publication bundleから撤去した。各rootの非空性からroot数は全file数以下とし、既存4,000,001file/32KiB line/4KiB path/depth4とhash/order/extra-fileの境界を維持する。12rootの公開とrename後復旧を追加して、合法な多数出力がpublicationだけで失敗する回帰を防ぐ。新attemptのstaging準備では旧receiptと`*.artifacts.jsonl`を両方削除し、receiptが無い孤立indexも回収する。無関係なsidecarを保護する回帰試験を含む。設計の部分置換は[ADR-0168](../adr/0168-publication-root-compatibility.md)。
+
+修正後のjobs全feature試験は36 passed / 0 failed / 1 ignored、recovery単独10件とjobs全target/all-feature Clippyも成功した（`target/perf-014-review-jobs-process-tests.log`・`target/perf-014-review-recovery-tests.log`・`target/perf-014-review-jobs-all-clippy.log`）。
