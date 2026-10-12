@@ -464,3 +464,7 @@ strict resident backendはlocal fileの圧縮decode-order metadataを一度走�
 ## 長い画像連番のmetadata
 
 [ADR-0166](../adr/0166-bounded-sequence-metadata.md)に従い、連番の時刻は有理数frame planで逐次生成し、inline64件/1MiB超過時のmetadataとnumeric/display参照は共通headerと64件/4MiB chunkへ保存する。全frame reportを保持せず、最終sequence JSONは小さいdescriptorを返す。両画素形式とframe index/time/hashは維持し、workerのpublication/recoveryは全画素fileを逐次照合する。短いversion1のframe JSONと旧reader互換経路を残す。ページAPIと確定順は[14](14-jobs.md)を参照する。
+
+## PERF-014のdelivery試作
+
+[ADR-0167](../adr/0167-experimental-export-delivery.md)に従い、Metal RGBA16FからBT.709 BGRA8 IOSurfaceへ書くhardware H.264入力と、ProRes/PCM24の直接packet muxは任意featureの比較入口だけに含める。公開export/worker/capabilitiesへは未採用。GPU待機とencoder完了前にsurfaceを再利用せず、private stageとno-clobber publicationを使う。対象fixtureの全体時間・画素/音声・色・時刻・metadata・失敗回収と対応範囲は[PERF-014](../testing/perf-014.md)を参照する。

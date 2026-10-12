@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 /// FLOW-004 capture boundary (ADR-0135): ScreenCaptureKit on macOS, a typed
 /// vendor-SDK adapter contract for deck ingest, and typed unsupported errors.
 pub mod capture;
+#[cfg(all(target_os = "macos", feature = "encoder-prototypes"))]
+pub mod encoder_prototype;
 #[cfg(target_os = "macos")]
 mod macos;
 pub mod output;

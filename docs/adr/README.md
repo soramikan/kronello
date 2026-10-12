@@ -196,6 +196,7 @@
 | [0164](0164-unified-linear-readback-and-bounded-staging.md) | linear status/画像の待機統合と有界staging | 採用（PERF-012受け入れ済み） | 2026-10-12 |
 | [0165](0165-bounded-export-metadata-and-receipts.md) | 長尺frame metadataとpublication receiptの有界化 | 部分置換（0166: image sequence） | 2026-10-12 |
 | [0166](0166-bounded-sequence-metadata.md) | 画像連番のmetadataと画素参照を有界manifestへ保存する | 採用（PERF-013受け入れ済み） | 2026-10-13 |
+| [0167](0167-experimental-export-delivery.md) | GPU encoder surfaceと直接packet muxの試作境界・既定採用の保留 | 採用 | 2026-10-13 |
 
 ## 追加と変更の規則
 
