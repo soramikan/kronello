@@ -43,3 +43,11 @@ cache単体2件ではstage cleanup後の再利用、参照PCM破損の拒否/hea
 - cache index/header欠落・破損、eviction、cancel、途中publication回収、runtime変更の追加試験を完了する。
 - layout/audio mode/gainの異なるgroupで非共有と各sampleを実worker検証する。
 - ADR/現在の設計、fmt・全workspace Clippy/testsを完了する。すべての受け入れ前にbacklogをdoneにしない。
+
+## 追加境界検証
+
+cache unit3件で欠落/破損/oversized header/index、取消、途中publication、無関係file保存、LRU/live reader、runtime library bytes変更を確認した。途中publication後に残るindex/payloadを次のwriter leaseで回収する修正を追加した。所有する64hex名の三点組と自分のtemporaryだけを対象とする。
+
+layout/mode/gainの実worker比較をさらに3pairsずつ追加した。5本のstereo/mono duplicate/5.1 duplicateはmix240,000→144,000frames・3groups、document/silence/explicit half duplicate/explicit unityは240,000→192,000frames・4groups。全sample/layout/PTS/packet/hashが一致した。単体silence/group keyテストだけで非共有を主張しない。合計9比較66 successful worker trialsである。
+
+fixtureのmono mask=1は既存APIが正しく拒否したため、実定義MONO=4へ合わせた。schema説明だけが1と誤記されていたのでmodel/project/API schemaとSwift生成hashを修正した。音声単独は映像frames=0へ期待値を合わせ、失敗試行を保存してv3を証拠にする。前sourceで開始したworkspace runは途中のschema差異で停止したため、成功扱いにしない。現sourceのschema generator試験は成功し、GPU変更と合わせた新しいworkspace runを実行中。

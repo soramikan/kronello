@@ -3,6 +3,634 @@
   "videotoolbox_private_sei_normalization_enabled": false,
   "records": [
     {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/evidence.json",
+      "raw_sha256": "9121e54b5bcf8bee935573c9a5eeb029fa74da8195751b6c790bb76462dac3f2",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-before/stereo.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-before/mono-a.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-before/mono-b.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-before/surround-a.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-before/surround-b.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-after/stereo.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-after/mono-a.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-after/mono-b.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-after/surround-a.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/0-after/surround-b.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-after/stereo.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-after/mono-a.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-after/mono-b.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-after/surround-a.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-after/surround-b.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-before/stereo.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-before/mono-a.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-before/mono-b.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-before/surround-a.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/1-before/surround-b.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-before/stereo.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-before/mono-a.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-before/mono-b.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-before/surround-a.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-before/surround-b.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-after/stereo.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-after/mono-a.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-after/mono-b.flac",
+              "encoded_sha256": "ad24205973a1dd78501cbe22dc63d9b5f1d3675933b10d330eba87476589b743",
+              "packet_metadata_sha256": "7a54e3d797e9dacffc29b0fa78cd8e0346991806fd44ccb22f5869b6e2b22937",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-after/surround-a.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-layout-groups-v3/2-after/surround-b.flac",
+              "encoded_sha256": "c19b200aaeed39795351c2b11c0f2d627b594af007381aedae67e4eff0033c8d",
+              "packet_metadata_sha256": "cb98373d8f8049869c7b8821b1d08a972e43d2b28ca4e7c99296a1780d1a7ad4",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/evidence.json",
+      "raw_sha256": "310074d4b45b4491caf8ca05958983d8a659faa0b83357cd294867b2831022ab",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-before/document.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-before/silence.flac",
+              "encoded_sha256": "38c7b3ed8c76fb7424a9e74d602b334f3dddce23b4da2e10d746b89ffc7ba0b0",
+              "packet_metadata_sha256": "6f8ba5fd7c1fed026c360289703798021d8cf1eac280e22283b5189f32237e59",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-before/half-a.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-before/half-b.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-before/full.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-after/document.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-after/silence.flac",
+              "encoded_sha256": "38c7b3ed8c76fb7424a9e74d602b334f3dddce23b4da2e10d746b89ffc7ba0b0",
+              "packet_metadata_sha256": "6f8ba5fd7c1fed026c360289703798021d8cf1eac280e22283b5189f32237e59",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-after/half-a.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-after/half-b.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/0-after/full.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-after/document.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-after/silence.flac",
+              "encoded_sha256": "38c7b3ed8c76fb7424a9e74d602b334f3dddce23b4da2e10d746b89ffc7ba0b0",
+              "packet_metadata_sha256": "6f8ba5fd7c1fed026c360289703798021d8cf1eac280e22283b5189f32237e59",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-after/half-a.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-after/half-b.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-after/full.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-before/document.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-before/silence.flac",
+              "encoded_sha256": "38c7b3ed8c76fb7424a9e74d602b334f3dddce23b4da2e10d746b89ffc7ba0b0",
+              "packet_metadata_sha256": "6f8ba5fd7c1fed026c360289703798021d8cf1eac280e22283b5189f32237e59",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-before/half-a.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-before/half-b.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/1-before/full.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-before/document.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-before/silence.flac",
+              "encoded_sha256": "38c7b3ed8c76fb7424a9e74d602b334f3dddce23b4da2e10d746b89ffc7ba0b0",
+              "packet_metadata_sha256": "6f8ba5fd7c1fed026c360289703798021d8cf1eac280e22283b5189f32237e59",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-before/half-a.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-before/half-b.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-before/full.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-after/document.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-after/silence.flac",
+              "encoded_sha256": "38c7b3ed8c76fb7424a9e74d602b334f3dddce23b4da2e10d746b89ffc7ba0b0",
+              "packet_metadata_sha256": "6f8ba5fd7c1fed026c360289703798021d8cf1eac280e22283b5189f32237e59",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-after/half-a.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-after/half-b.flac",
+              "encoded_sha256": "0c7663df3a502baede54c5f2f455328a6f9675ec1714488fb863d28460945d3e",
+              "packet_metadata_sha256": "5663d5b32c418ac453ec33e0f297f2d046ab2065af925c32b34fd20061d94665",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            },
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-distinct-mode-gain-groups-v3/2-after/full.flac",
+              "encoded_sha256": "4b7137549bb2edf3d206158f5c65593910352523db2725cf8edae81eb5cf2a52",
+              "packet_metadata_sha256": "2f1d79603eab389c64da349593695b5fe04456f638b1d8e7bbe13636311b5fd8",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                11
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-011/matrix-pcm-flac-one-second/evidence.json",
       "raw_sha256": "cb6b1d93e7ad61cacbe8da4473ad2fc46d504867c3c19d6ddbe8e8e1d4fe11dd",
       "all_declared_packet_comparisons_equal": true,

@@ -74,6 +74,30 @@ impl SpoolCache {
                 let _ = std::fs::remove_file(entry.path());
             }
         }
+        // A killed publisher can leave a committed index or payload before
+        // its header. No live writer exists while this lease is held.
+        let mut stems = std::collections::BTreeSet::new();
+        for entry in std::fs::read_dir(&self.root)? {
+            let path = entry?.path();
+            if matches!(
+                path.extension().and_then(|s| s.to_str()),
+                Some("pcm" | "idx" | "json")
+            ) && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                && stem.len() == 64
+                && stem.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                stems.insert(stem.to_owned());
+            }
+        }
+        for stem in stems {
+            let paths =
+                ["pcm", "idx", "json"].map(|suffix| self.root.join(format!("{stem}.{suffix}")));
+            if !paths.iter().all(|path| path.is_file()) {
+                for path in paths {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
         let mut libraries = std::collections::BTreeSet::new();
         for entry in std::fs::read_dir(&capabilities.library_directory)? {
             let entry = entry?;
@@ -301,4 +325,165 @@ fn hash_reader(
         hash.update(&buffer[..read]);
     }
     Ok(format!("{:x}", hash.finalize()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct Fixture {
+        project: tempfile::TempDir,
+        _root: tempfile::TempDir,
+        _libraries: tempfile::TempDir,
+        cache: SpoolCache,
+        asset: kronello_model::Asset,
+        capabilities: MediaCapabilities,
+        pcm: tempfile::NamedTempFile,
+        report: AudioDecodeReport,
+    }
+    impl Fixture {
+        fn new(entries: usize) -> Self {
+            let project = tempfile::tempdir().unwrap();
+            let root = tempfile::tempdir().unwrap();
+            let libraries = tempfile::tempdir().unwrap();
+            std::fs::write(
+                libraries.path().join("libavutil.dylib"),
+                b"fixed test runtime bytes",
+            )
+            .unwrap();
+            let cache = SpoolCache::new(root.path().into(), 100000, entries).unwrap();
+            let capabilities = MediaCapabilities {
+                schema_version: 1,
+                ffmpeg_version: "test".into(),
+                library_directory: libraries.path().into(),
+                substituted: true,
+                libraries: vec![],
+                distribution_eligible: false,
+                development_only: true,
+                codecs: vec![],
+                hwaccels: vec![],
+            };
+            let asset = kronello_model::Asset {
+                id: kronello_model::AssetId::new(),
+                kind: kronello_model::AssetKind::Audio,
+                content_hash: "1".repeat(64),
+                locator: kronello_model::AssetLocator {
+                    relative: None,
+                    absolute: None,
+                },
+                streams: vec![],
+            };
+            let mut pcm = tempfile::NamedTempFile::new_in(project.path()).unwrap();
+            for _ in 0..5000 {
+                pcm.write_all(&0.25_f32.to_le_bytes()).unwrap();
+                pcm.write_all(&(-0.125_f32).to_le_bytes()).unwrap();
+            }
+            pcm.flush().unwrap();
+            let report = AudioDecodeReport {
+                source_start: kronello_time::Time::ZERO,
+                source_rate: 48000,
+                source_channels: 2,
+                mask: kronello_model::ChannelMask::STEREO,
+                frames: 5000,
+            };
+            Self {
+                project,
+                _root: root,
+                _libraries: libraries,
+                cache,
+                capabilities,
+                asset,
+                pcm,
+                report,
+            }
+        }
+        fn lease(&self) -> Lease {
+            self.cache
+                .lease(
+                    &self.asset,
+                    0,
+                    &self.capabilities,
+                    &self.project.path().join("input.kronello"),
+                )
+                .unwrap()
+                .unwrap()
+        }
+    }
+    #[test]
+    fn missing_corrupt_and_oversized_manifests_never_return_samples() {
+        let f = Fixture::new(2);
+        let lease = f.lease();
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_none());
+        assert!(lease.publish(&f.pcm, &f.report, &mut |_| Ok(())).unwrap());
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_some());
+        std::fs::write(lease.path("idx"), [0_u8; 64]).unwrap();
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_none());
+        lease.publish(&f.pcm, &f.report, &mut |_| Ok(())).unwrap();
+        std::fs::remove_file(lease.path("idx")).unwrap();
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_none());
+        lease.publish(&f.pcm, &f.report, &mut |_| Ok(())).unwrap();
+        std::fs::write(lease.path("json"), b"{not a manifest}").unwrap();
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_none());
+        std::fs::write(lease.path("json"), vec![b' '; 65537]).unwrap();
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_none());
+    }
+    #[test]
+    fn cancel_and_partial_publication_cleanup_preserve_unrelated_files() {
+        let f = Fixture::new(2);
+        let lease = f.lease();
+        let error = lease
+            .publish(&f.pcm, &f.report, &mut |_| {
+                Err(MediaError::UnsupportedFeature("cancel".into()))
+            })
+            .unwrap_err();
+        assert_eq!(error.code(), "UNSUPPORTED_FEATURE");
+        assert!(!lease.path("json").exists() && !lease.path("pcm").exists());
+        let orphan_index = lease.path("idx");
+        std::fs::write(&orphan_index, [1; 32]).unwrap();
+        let orphan_payload = f.cache.root.join(format!("{}.pcm", "2".repeat(64)));
+        std::fs::write(&orphan_payload, [2; 32]).unwrap();
+        let temporary = f.cache.root.join(".spool-payload-interrupted");
+        std::fs::write(&temporary, [3; 32]).unwrap();
+        let unrelated = f.cache.root.join("keep-user-note.txt");
+        std::fs::write(&unrelated, b"keep").unwrap();
+        drop(lease);
+        let lease = f.lease();
+        assert!(!orphan_index.exists() && !orphan_payload.exists() && !temporary.exists());
+        assert_eq!(std::fs::read(unrelated).unwrap(), b"keep");
+        lease.publish(&f.pcm, &f.report, &mut |_| Ok(())).unwrap();
+        assert!(
+            lease
+                .load(&mut |_| Err(MediaError::UnsupportedFeature("cancel validation".into())))
+                .is_err()
+        );
+    }
+    #[test]
+    fn eviction_keeps_open_readers_valid_and_runtime_bytes_change_identity() {
+        let mut f = Fixture::new(1);
+        let lease = f.lease();
+        let first_key = lease.key.clone();
+        lease.publish(&f.pcm, &f.report, &mut |_| Ok(())).unwrap();
+        let (mut reader, index, _, _) = lease.load(&mut |_| Ok(())).unwrap().unwrap();
+        drop(index);
+        drop(lease);
+        f.asset.content_hash = "2".repeat(64);
+        let lease = f.lease();
+        assert_ne!(lease.key, first_key);
+        let admitted = lease.publish(&f.pcm, &f.report, &mut |_| Ok(())).unwrap();
+        let mut sample = [0; 4];
+        reader.read_exact(&mut sample).unwrap();
+        assert_eq!(f32::from_le_bytes(sample), 0.25);
+        if admitted {
+            assert!(!f.cache.root.join(format!("{first_key}.json")).exists());
+        }
+        let key = lease.key.clone();
+        drop(lease);
+        std::fs::write(
+            f.capabilities.library_directory.join("libavutil.dylib"),
+            b"changed runtime bytes",
+        )
+        .unwrap();
+        let lease = f.lease();
+        assert_ne!(lease.key, key);
+        assert!(lease.load(&mut |_| Ok(())).unwrap().is_none());
+    }
 }

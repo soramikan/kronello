@@ -26,6 +26,8 @@ def main():
     def save(name, case, output, extra, filenames):
         case['name'] = name
         case['submit']['output'] = output
+        if output['format'] in ('flac', 'mp3') and all(leg['format'] in ('flac', 'mp3') for leg in extra):
+            case['expected_rendered_frames'] = 0
         case['submit']['outputs'] = [{'output': leg, 'chapters': 'omit'} for leg in extra]
         case['output_name'] = filenames[0]
         case['additional_output_names'] = filenames[1:]
@@ -60,6 +62,20 @@ def main():
         dict(movie, format='av1_mp4', profile_version=1, audio_codec='aac'),
         dict(movie, format='av1_webm', profile_version=1, audio_codec='opus')],
         ['movie.mov', 'audio.flac', 'aac.mp4', 'opus.webm'])
+    case = deepcopy(base)
+    save('distinct-layout-groups', case, document, [
+        dict(document, audio_layout=4), dict(document, audio_layout=4),
+        dict(document, audio_layout=1551), dict(document, audio_layout=1551)],
+        ['stereo.flac', 'mono-a.flac', 'mono-b.flac', 'surround-a.flac', 'surround-b.flac'])
+    case = deepcopy(base)
+    audio = next(asset for asset in case['document']['assets'] if asset['kind'] == 'audio')
+    explicit = {'asset': audio['id'], 'stream_index': 0,
+        'placement': {'start': rational(0), 'end': rational(1)}, 'source_in': rational(600), 'gain': 0.5}
+    half = dict(document, audio='explicit', clips=[explicit])
+    full = dict(document, audio='explicit', clips=[dict(explicit, gain=1.0)])
+    save('distinct-mode-gain-groups', case, document,
+        [dict(document, audio='silence'), half, deepcopy(half), full],
+        ['document.flac', 'silence.flac', 'half-a.flac', 'half-b.flac', 'full.flac'])
     (args.output / 'manifest.json').write_text(json.dumps({'schema_version': 1,
         'source_case_sha256': digest(args.source), 'cases': manifest}, indent=2) + '\n')
 
