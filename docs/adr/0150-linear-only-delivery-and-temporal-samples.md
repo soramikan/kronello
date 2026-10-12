@@ -1,6 +1,6 @@
 # ADR-0150: 書き出しとshutter sampleのlinear専用境界
 
-- 状態: 採用
+- 状態: 部分置換（[ADR-0159](0159-prepared-export-and-bounded-sample-scenes.md): Movieの不変hash/sample共有。linear専用出力・転送・f64積算は維持）
 - 日付: 2026-10-11
 - 対象: PERF-004
 - 部分置換: ADR-0092の常時二面生成、ADR-0097のtemporal sampleごとの二面readback見積もり。通常frameのlinear/display契約、単一graph、validation、cache公開・所有権・観測scopeは維持する。

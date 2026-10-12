@@ -291,6 +291,16 @@ pub(crate) fn frame_metadata(
     backend: &dyn RenderBackend,
     request: FrameRequest,
 ) -> Result<FrameMetadata, RenderError> {
+    frame_metadata_with_hash(snapshot, scene, backend, request, &snapshot.content_hash()?)
+}
+
+pub(crate) fn frame_metadata_with_hash(
+    snapshot: &RenderSnapshot,
+    scene: &crate::SceneIr,
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    hash: &str,
+) -> Result<FrameMetadata, RenderError> {
     let working = snapshot.profile().working_space;
     let metadata = FrameMetadata {
         hdr:snapshot.profile().hdr.map(Into::into),
@@ -298,7 +308,7 @@ pub(crate) fn frame_metadata(
         schema_version: 1,
         snapshot_schema_version: crate::SNAPSHOT_SCHEMA_VERSION,
         project_schema_version: snapshot.project().schema_version,
-        snapshot_content_hash: snapshot.content_hash()?,
+        snapshot_content_hash: hash.into(),
         revision: snapshot.revision().to_string(),
         composition: snapshot.composition(),
         target: snapshot.target(),
@@ -354,7 +364,10 @@ pub(crate) fn frame_metadata(
 
 /// Both frame assembly and movie streaming reserve the float32 peak before
 /// entering the selected backend, including the full cumulative halo.
-fn check_tile_surface_budget(dag: &crate::RenderDag, streaming: bool) -> Result<(), RenderError> {
+pub(crate) fn check_tile_surface_budget(
+    dag: &crate::RenderDag,
+    streaming: bool,
+) -> Result<(), RenderError> {
     const LIMIT: u64 = 512 * 1024 * 1024;
     let bytes = dag.tile_surface_bytes(16)?;
     if bytes > LIMIT {

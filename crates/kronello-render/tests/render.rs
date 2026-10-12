@@ -3541,6 +3541,328 @@ fn temporal_settings() -> TemporalSettings {
         cut_policy: CutPolicy::AvoidCrossing,
     }
 }
+
+fn prepared_export_tiles(
+    snapshot: &RenderSnapshot,
+    request: FrameRequest,
+    fonts: &[FontData<'_>],
+) -> (Vec<[u32; 4]>, FrameMetadata) {
+    let mut pixels = Vec::new();
+    let metadata = render_frame_linear_tiles(
+        snapshot,
+        fonts,
+        &CpuReferenceBackend,
+        request,
+        &mut |_, _, tile| {
+            pixels.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+            Ok(())
+        },
+    )
+    .unwrap();
+    (pixels, metadata)
+}
+
+#[test]
+fn prepared_export_shares_samples_and_static_work_with_exact_japanese_pixels() {
+    let (project, id) = project();
+    for count in [3, 8] {
+        let settings = TemporalSettings {
+            samples: count,
+            ..temporal_settings()
+        };
+        let snapshot = RenderSnapshot::new(
+            &project,
+            id,
+            7,
+            RenderProfile {
+                temporal: Some(settings),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let diagnostics = ExecutionDiagnosticsCollector::enabled();
+        let scope = diagnostics.activate();
+        let mut prepared = ExportRenderSession::new(snapshot.clone(), &fonts()).unwrap();
+        let mut actual_frames = Vec::new();
+        for time in [t(1, 2), t(13, 24), t(7, 12)] {
+            let request = FrameRequest {
+                time,
+                region: OutputRegion {
+                    origin: [-1.0, -1.0],
+                    extent: [66.0, 34.0],
+                    pixels: [513, 3],
+                },
+            };
+            let mut actual = Vec::new();
+            let metadata = prepared
+                .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+                    actual.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+                    Ok(())
+                })
+                .unwrap();
+            actual_frames.push((request, actual, metadata));
+        }
+        drop(scope);
+        let stats = diagnostics.snapshot().unwrap();
+        assert_eq!(stats.stages["snapshot_validation"].calls, 1);
+        assert_eq!(stats.stages["snapshot_canonical_hash"].calls, 1);
+        assert_eq!(stats.stages["snapshot_evaluation_hash"].calls, 1);
+        assert_eq!(stats.stages["static_sequence_preparation"].calls, 1);
+        assert!(stats.stages["scene_ir_evaluation"].calls <= u64::from(3 * (count + 1)));
+        assert!(stats.counts["export_sample_scene_hits"] > 0);
+        for (request, pixels, metadata) in actual_frames {
+            let expected = prepared_export_tiles(&snapshot, request, &fonts());
+            assert_eq!(pixels, expected.0);
+            assert_eq!(metadata, expected.1);
+        }
+    }
+}
+
+#[test]
+fn prepared_export_preserves_half_open_cuts_and_halo_pixels() {
+    let (project, sequence) = temporal_cut_sequence();
+    for cut_policy in [CutPolicy::AllowCrossing, CutPolicy::AvoidCrossing] {
+        let snapshot = RenderSnapshot::for_target(
+            &project,
+            RenderTarget::Sequence { sequence },
+            7,
+            RenderProfile {
+                temporal: Some(TemporalSettings {
+                    samples: 3,
+                    cut_policy,
+                    ..temporal_settings()
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut prepared = ExportRenderSession::new(snapshot.clone(), &[]).unwrap();
+        for time in [Time::ZERO, t(99, 100), Time::ONE, t(2, 1)] {
+            let request = FrameRequest {
+                time,
+                region: OutputRegion {
+                    origin: [-0.25; 2],
+                    extent: [2.5; 2],
+                    pixels: [513, 2],
+                },
+            };
+            let mut pixels = Vec::new();
+            let metadata = prepared
+                .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+                    pixels.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(
+                (pixels, metadata),
+                prepared_export_tiles(&snapshot, request, &[])
+            );
+        }
+    }
+    let (project, id) = fx_project();
+    let snapshot = RenderSnapshot::new(
+        &project,
+        id,
+        7,
+        RenderProfile {
+            temporal: Some(TemporalSettings {
+                samples: 3,
+                ..temporal_settings()
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let request = FrameRequest {
+        time: t(1, 2),
+        region: OutputRegion {
+            origin: [-2.0; 2],
+            extent: [68.0, 36.0],
+            pixels: [513, 3],
+        },
+    };
+    let mut pixels = Vec::new();
+    let metadata = ExportRenderSession::new(snapshot.clone(), &[])
+        .unwrap()
+        .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+            pixels.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        (pixels, metadata),
+        prepared_export_tiles(&snapshot, request, &[])
+    );
+}
+
+#[test]
+fn prepared_export_large_shutter_plans_stay_bounded_and_sink_failures_propagate() {
+    let root = composition(vec![]);
+    let id = root.id;
+    let project = Project {
+        compositions: vec![DocumentObject::Known(root)],
+        ..Default::default()
+    };
+    let snapshot = RenderSnapshot::new(
+        &project,
+        id,
+        7,
+        RenderProfile {
+            temporal: Some(TemporalSettings {
+                samples: 4096,
+                ..temporal_settings()
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut prepared = ExportRenderSession::with_scene_capacity(
+        snapshot,
+        &[],
+        CacheCapacity {
+            entries: 2,
+            bytes: 1024,
+        },
+    )
+    .unwrap();
+    let request = FrameRequest {
+        time: t(1, 2),
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [64.0, 32.0],
+            pixels: [513, 1],
+        },
+    };
+    let metadata = prepared
+        .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+            assert!(tile.iter().all(|pixel| *pixel == [0.0; 4]));
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(metadata.temporal.unwrap().samples.len(), 4096);
+    let (entries, bytes) = prepared.retained_scene_payload();
+    assert!(entries <= 2 && bytes <= 1024);
+    let error = prepared
+        .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, _| {
+            Err(RenderError::InvalidInput("test sink failure".into()))
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("test sink failure"));
+}
+
+#[test]
+fn prepared_export_owns_font_proof_and_rejects_missing_or_changed_locks() {
+    let (project, id) = project();
+    let snapshot = snapshot(&project, id);
+    assert_eq!(
+        ExportRenderSession::new(snapshot.clone(), &[])
+            .err()
+            .unwrap()
+            .code(),
+        "ASSET_MISSING"
+    );
+    let mut bytes = font().0.clone();
+    let mut prepared = ExportRenderSession::new(
+        snapshot.clone(),
+        &[FontData {
+            identity: &font().1,
+            bytes: &bytes,
+        }],
+    )
+    .unwrap();
+    bytes[0] ^= 1;
+    let error = ExportRenderSession::new(
+        snapshot.clone(),
+        &[FontData {
+            identity: &font().1,
+            bytes: &bytes,
+        }],
+    )
+    .err()
+    .unwrap();
+    assert_eq!(error.code(), "ASSET_HASH_MISMATCH");
+    let request = FrameRequest {
+        time: t(1, 2),
+        region: region(),
+    };
+    let mut pixels = Vec::new();
+    let metadata = prepared
+        .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+            pixels.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        (pixels, metadata),
+        prepared_export_tiles(&snapshot, request, &fonts())
+    );
+}
+
+#[test]
+fn prepared_export_hdr_zero_shutter_and_oversized_scene_fallback_are_bit_exact() {
+    let (node, shape) = rectangle(
+        [16.0, 12.0],
+        Color::new(ColorSpace::LinearRec2020, [3.0, 2.0, 1.0], 0.5).unwrap(),
+    );
+    let root = composition(vec![node]);
+    let id = root.id;
+    let project = Project {
+        compositions: vec![DocumentObject::Known(root)],
+        shapes: vec![DocumentObject::Known(shape)],
+        ..Default::default()
+    };
+    for shutter_angle in [t(180, 1), Time::ZERO] {
+        let snapshot = RenderSnapshot::new(
+            &project,
+            id,
+            7,
+            RenderProfile {
+                working_space: ColorSpace::LinearRec2020,
+                hdr: Some(HdrSettings {
+                    transfer: HdrTransfer::Pq,
+                }),
+                temporal: Some(TemporalSettings {
+                    shutter_angle,
+                    ..temporal_settings()
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let request = FrameRequest {
+            time: t(1, 2),
+            region: OutputRegion {
+                origin: [0.0; 2],
+                extent: [64.0, 32.0],
+                pixels: [513, 2],
+            },
+        };
+        // A one-byte weight budget cannot retain this scene. Re-evaluation must
+        // preserve HDR truth and the ordinary temporal numerical boundary.
+        let mut prepared = ExportRenderSession::with_scene_capacity(
+            snapshot.clone(),
+            &[],
+            CacheCapacity {
+                entries: 1,
+                bytes: 1,
+            },
+        )
+        .unwrap();
+        let mut pixels = Vec::new();
+        let metadata = prepared
+            .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+                pixels.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+                Ok(())
+            })
+            .unwrap();
+        assert!(pixels.iter().any(|pixel| f32::from_bits(pixel[0]) > 1.0));
+        assert_eq!(prepared.retained_scene_payload(), (0, 0));
+        assert_eq!(
+            (pixels, metadata),
+            prepared_export_tiles(&snapshot, request, &[])
+        );
+    }
+}
 #[test]
 fn temporal_whole_composition_matches_independent_subtime_baseline_and_tiles() {
     let (p, c) = project();

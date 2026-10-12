@@ -230,7 +230,7 @@ pub struct CaptionSpan {
 }
 
 /// Draw-time synthesis flags attached to one resolved style entry.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct CaptionSpanFlags {
     pub bold: bool,
     pub italic: bool,

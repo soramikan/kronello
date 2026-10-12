@@ -1,5 +1,9 @@
 # 05 レンダラーと GPU
 
+## PERF-007: 書き出し準備とsample SceneIR共有
+
+[ADR-0159](../adr/0159-prepared-export-and-bounded-sample-scenes.md)に従い、同期exportと固定workerが使うmedia export入口で、検証済みsnapshot・static lowering・canonical/evaluation hash・不変font/LUT入力とmetadata共通情報を保持する。通常raw入力の検証は維持する。一意な有理数sample時刻のSceneIRを最大16件/64MiBのlogical payloadで共有し、DAGはtile ROI/haloごとに構築する。大きいsample数や巨大sceneは再評価を許し、先行保持を無制限に増やさない。f64積算順とlinear-only境界は維持する。受け入れは[PERF-007](../testing/perf-007.md)で追跡する。
+
 ## PERF-004: 二組のframeによるdelivery pipeline
 
 [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md)に従い、Movie/GIFのtile render・色変換はcaller thread、

@@ -17,6 +17,7 @@ unicode-linebreak = "=0.1.5"
 unicode-script = "=0.5.8"
 sha2 = "0.10"
 thiserror = "2"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 kronello-testkit = { path = "../kronello-testkit" }

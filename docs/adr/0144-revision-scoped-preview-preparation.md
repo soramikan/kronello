@@ -1,6 +1,6 @@
 # ADR-0144: revision単位の検証済みプレビュー準備
 
-- 状態: 部分置換（[ADR-0147](0147-indexed-timeline-and-proxy-preparation.md) がPreferの準備cache除外を更新。その他の条項を維持）
+- 状態: 部分置換（[ADR-0147](0147-indexed-timeline-and-proxy-preparation.md) がPreferの準備cache除外を更新。その他の条項を維持）。[ADR-0159](0159-prepared-export-and-bounded-sample-scenes.md) が不変hash保持とMovieのsample共有を追加
 - 日付: 2026-10-11
 - 対象: PERF-003（プレビュー準備の範囲）
 - 部分置換: ADR-0083 / ADR-0056 の通常モードにおける要求ごとのstore開閉。安全モード排他・FIFO・明示project path・共有Command/Queryを維持する。

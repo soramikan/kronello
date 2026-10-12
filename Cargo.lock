@@ -1312,6 +1312,7 @@ dependencies = [
  "kronello-testkit",
  "kronello-vector",
  "rustybuzz",
+ "serde",
  "serde_json",
  "sha2",
  "thiserror",

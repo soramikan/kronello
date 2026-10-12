@@ -1,7 +1,9 @@
 //! Deterministic horizontal layout from evaluated text and explicitly supplied,
 //! locked font bytes. No filesystem, font discovery, fallback, or persistent cache.
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
+use std::sync::Arc;
 
 use kronello_model::{
     AnimatorMode, Color, FiniteF64, FontRef, Path, PathSegment, ResolvedCharacterAnimation,
@@ -24,6 +26,102 @@ const MAX_OUTLINE_SEGMENTS: usize = 1_048_576;
 pub struct FontData<'a> {
     pub identity: &'a FontRef,
     pub bytes: &'a [u8],
+}
+
+/// Owned immutable locked bytes. The proof cannot outlive or be detached from
+/// its bytes, and ordinary layout still verifies untrusted inputs on each call.
+#[derive(Clone)]
+pub struct VerifiedFonts {
+    sources: Vec<(FontRef, Arc<[u8]>)>,
+}
+impl VerifiedFonts {
+    pub fn new(locks: &[FontRef], fonts: &[FontData<'_>]) -> Result<Self, LayoutError> {
+        let mut sources = Vec::new();
+        for lock in locks.iter().collect::<BTreeSet<_>>() {
+            let mut matching = fonts.iter().filter(|font| font.identity == lock);
+            let source = matching
+                .next()
+                .ok_or_else(|| LayoutError::MissingFont { font: lock.clone() })?;
+            if matching.next().is_some() {
+                return Err(LayoutError::UnsupportedFeature {
+                    feature: "duplicate font source",
+                });
+            }
+            let hash = format!("{:x}", Sha256::digest(source.bytes));
+            if hash != lock.sha256 {
+                return Err(LayoutError::FontHashMismatch {
+                    expected: lock.sha256.clone(),
+                    actual: hash,
+                });
+            }
+            let actual = pin_font(source.bytes, lock.face_index)?;
+            if &actual != lock {
+                return Err(LayoutError::FontIdentityMismatch {
+                    expected: Box::new(lock.clone()),
+                    actual: Box::new(actual),
+                });
+            }
+            let face = Face::parse(source.bytes, lock.face_index).map_err(|_| {
+                LayoutError::InvalidFont {
+                    face_index: lock.face_index,
+                }
+            })?;
+            if face.is_variable() {
+                return Err(LayoutError::UnsupportedFeature {
+                    feature: "variable font axes",
+                });
+            }
+            sources.push((lock.clone(), Arc::from(source.bytes)));
+        }
+        Ok(Self { sources })
+    }
+    pub fn data(&self) -> Vec<FontData<'_>> {
+        self.sources
+            .iter()
+            .map(|(identity, bytes)| FontData { identity, bytes })
+            .collect()
+    }
+    pub fn retained_bytes(&self) -> usize {
+        self.sources.iter().map(|(_, bytes)| bytes.len()).sum()
+    }
+    /// Pointer matching is sound only because this proof owns an immutable Arc
+    /// for every matched allocation. Other buffers take the ordinary verifier.
+    pub fn matches(&self, fonts: &[FontData<'_>]) -> bool {
+        fonts.len() == self.sources.len()
+            && fonts
+                .iter()
+                .zip(&self.sources)
+                .all(|(font, (identity, bytes))| {
+                    font.identity == identity
+                        && font.bytes.as_ptr() == bytes.as_ptr()
+                        && font.bytes.len() == bytes.len()
+                })
+    }
+    fn faces<'a>(&'a self, text: &ResolvedText) -> Result<Vec<Face<'a>>, LayoutError> {
+        text.styles
+            .iter()
+            .map(|style| {
+                let (_, bytes) = self
+                    .sources
+                    .iter()
+                    .find(|(lock, _)| lock == &style.font)
+                    .ok_or_else(|| LayoutError::MissingFont {
+                        font: style.font.clone(),
+                    })?;
+                Face::parse(bytes, style.font.face_index).map_err(|_| LayoutError::InvalidFont {
+                    face_index: style.font.face_index,
+                })
+            })
+            .collect()
+    }
+    pub fn validate(&self, text: &ResolvedText) -> Result<(), LayoutError> {
+        text.validate()?;
+        self.faces(text)?;
+        Ok(())
+    }
+    pub fn layout(&self, text: &ResolvedText) -> Result<LayoutResult, LayoutError> {
+        layout_inner(text, &self.data(), Some(self))
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MissingCluster {
@@ -60,19 +158,19 @@ pub enum LayoutError {
     NonFiniteGeometry,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Bounds {
     pub min: [f64; 2],
     pub max: [f64; 2],
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GraphemeCluster {
     pub source: TextRange,
     /// Index range into LayoutResult.shaping_clusters. Several graphemes can
     /// reference the same shaping cluster (e.g. a ligature).
     pub shaping_clusters: Range<usize>,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ShapingCluster {
     pub source: TextRange,
     pub graphemes: Range<usize>,
@@ -83,7 +181,7 @@ pub struct ShapingCluster {
     /// Explicit separators retain source correspondence with no glyphs.
     pub mandatory_break: bool,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AnimationUnit {
     /// Complete glyph membership including appended ruby glyphs.
     pub associated_glyphs: Vec<usize>,
@@ -92,7 +190,7 @@ pub struct AnimationUnit {
     pub shaping_clusters: Range<usize>,
     pub glyphs: Range<usize>,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PositionedGlyph {
     pub gradient: Option<Box<kronello_model::ResolvedGradient>>,
     pub glyph_id: u16,
@@ -108,7 +206,7 @@ pub struct PositionedGlyph {
     /// Positioned text-local vector path, suitable for coverage rasterization.
     pub outline: Path,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LayoutLine {
     /// Includes an explicit separator when present.
     pub source: TextRange,
@@ -121,7 +219,7 @@ pub struct LayoutLine {
     /// An indivisible segment can exceed wrap width; no silent clipping occurs.
     pub overflow: bool,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LayoutResult {
     pub layout_version: u32,
     pub lines: Vec<LayoutLine>,
@@ -474,6 +572,13 @@ fn line_ranges(text: &ResolvedText, clusters: &[RawCluster]) -> Vec<Range<usize>
 /// All lengths/positions/bounds use design_px. Output pixel scale is absent.
 /// Preserves shaping across line breaks by permitting only safe shaper boundaries.
 pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResult, LayoutError> {
+    layout_inner(text, fonts, None)
+}
+fn layout_inner(
+    text: &ResolvedText,
+    fonts: &[FontData<'_>],
+    verified: Option<&VerifiedFonts>,
+) -> Result<LayoutResult, LayoutError> {
     if text.text.len() > MAX_TEXT_BYTES || text.styles.len() > 4096 {
         return Err(LayoutError::BudgetExceeded);
     }
@@ -499,7 +604,10 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
             feature: "tabs/control/bidi formatting",
         });
     }
-    let faces = verified_faces(text, fonts)?;
+    let faces = match verified {
+        Some(verified) => verified.faces(text)?,
+        None => verified_faces(text, fonts)?,
+    };
     if text.layout_version == 1 && !text.character_animations.is_empty() {
         return Err(LayoutError::UnsupportedFeature {
             feature: "character animation requires layout version 2",
@@ -722,7 +830,7 @@ pub fn layout(text: &ResolvedText, fonts: &[FontData<'_>]) -> Result<LayoutResul
         }
     }
     if text.layout_version == 2 {
-        append_ruby(text, fonts, &mut result)?;
+        append_ruby(text, fonts, &mut result, verified)?;
     }
     apply_character_animations(text, &mut result)?;
 
@@ -1140,6 +1248,7 @@ fn append_ruby(
     text: &ResolvedText,
     fonts: &[FontData<'_>],
     result: &mut LayoutResult,
+    verified: Option<&VerifiedFonts>,
 ) -> Result<(), LayoutError> {
     for association in &text.ruby {
         let parents: Vec<_> = result
@@ -1176,7 +1285,7 @@ fn append_ruby(
                 .map_err(|_| LayoutError::NonFiniteGeometry)?,
             ..style.clone()
         }];
-        let laid = layout(&ruby, fonts)?;
+        let laid = layout_inner(&ruby, fonts, verified)?;
         if laid.lines.len() != 1 {
             return Err(LayoutError::UnsupportedFeature {
                 feature: "ruby mandatory break",

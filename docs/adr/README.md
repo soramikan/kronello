@@ -164,7 +164,7 @@
 
 | [0143](0143-deadline-driven-native-notifications.md) | native の外部状態確認を描画頻度から分離する | 採用 | 2026-10-11 |
 
-| [0144](0144-revision-scoped-preview-preparation.md) | revision単位の検証済みプレビュー準備 | 部分置換（0147） | 2026-10-11 |
+| [0144](0144-revision-scoped-preview-preparation.md) | revision単位の検証済みプレビュー準備 | 部分置換（0147 / 0159） | 2026-10-11 |
 
 | [0145](0145-invalid-document-diagnostics-and-css-easing.md) | 既知不正文書の診断と CSS 時間イージング | 採用 | 2026-10-11 |
 
@@ -173,7 +173,7 @@
 | [0147](0147-indexed-timeline-and-proxy-preparation.md) | タイムラインの派生索引とproxy準備再利用 | 採用 | 2026-10-11 |
 | [0148](0148-audio-only-delivery-without-video.md) | 音声単独出力の映像処理省略 | 採用 | 2026-10-11 |
 | [0149](0149-codec-parallelism-and-packet-spans.md) | Codec別並列度と遅延packetのspan | 採用 | 2026-10-11 |
-| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 採用 | 2026-10-11 |
+| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 部分置換（0159） | 2026-10-11 |
 | [0151](0151-bounded-playback-pcm-sharing.md) | 再生準備の有界PCM共有 | 部分置換（0155） | 2026-10-11 |
 | [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 採用 | 2026-10-11 |
 | [0153](0153-expected-hash-verification-memo.md) | 資産検証メモを期待hashへ結び付ける | 採用 | 2026-10-11 |
@@ -185,6 +185,8 @@
 | [0157](0157-local-coverage-and-last-consumer-surfaces.md) | 保守的な局所coverage面と最終consumerでの解放 | 採用 | 2026-10-11 |
 
 | [0158](0158-scoped-export-execution-measurements.md) | 固定workerの有界な工程観測 | 採用（PERF-006受け入れ進行中） | 2026-10-12 |
+
+| [0159](0159-prepared-export-and-bounded-sample-scenes.md) | 書き出し準備と有界sample SceneIR共有 | 採用（PERF-007受け入れ進行中） | 2026-10-12 |
 
 ## 追加と変更の規則
 

@@ -5,18 +5,21 @@ import hashlib
 import json
 from pathlib import Path
 
-from perf_export_worker import canonical, digest
+from perf_export_worker import canonical, digest, percentile
 
 
-def compact(value):
+def compact(value, key=""):
     if isinstance(value, dict):
-        return {key: compact(item) for key, item in value.items()}
+        return {name: compact(item, name) for name, item in value.items()}
     if isinstance(value, list):
-        if len(value) > 64:
+        if len(value) > 64 or (key == "frames" and len(value) > 1) or (key == "first_samples_us" and len(value) > 8):
             encoded = canonical(value)
-            return {"count": len(value), "canonical_bytes": len(encoded),
+            result = {"count": len(value), "canonical_bytes": len(encoded),
                     "canonical_sha256": hashlib.sha256(encoded).hexdigest(),
                     "first": compact(value[0]), "last": compact(value[-1])}
+            if key == "first_samples_us":
+                result.update(p50_us=percentile(value, 0.5), p95_us=percentile(value, 0.95))
+            return result
         return [compact(item) for item in value]
     return value
 

@@ -6,8 +6,8 @@ use kronello_audio::{
 };
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
-    FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot, frame_samples,
-    render_frame_linear_tiles,
+    ExportRenderSession, FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot,
+    frame_samples,
 };
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Rational, TimeRange};
@@ -1672,6 +1672,7 @@ impl MediaRuntime {
             mut staged,
             mut probes,
         } = if video_legs.iter().any(|leg| leg.profile.has_video()) {
+            let mut render_session = ExportRenderSession::new(snapshot.render.clone(), fonts)?;
             let ticks: Vec<_> = times
                 .iter()
                 .map(|(_, time)| {
@@ -1703,9 +1704,7 @@ impl MediaRuntime {
                     checkpoint(number as u64)?;
                     let mut bundle = producer.acquire()?;
                     let render = diagnostics.time("render_tiles_and_conversion");
-                    let mut frame_metadata = render_frame_linear_tiles(
-                        &snapshot.render,
-                        fonts,
+                    let mut frame_metadata = render_session.render_linear_tiles(
                         backend,
                         FrameRequest {
                             time: *time,
