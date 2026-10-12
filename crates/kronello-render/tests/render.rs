@@ -471,6 +471,53 @@ fn sequence_rational_grid_files_png16_raw_truth_metadata_and_nonoverwrite() {
 }
 
 #[test]
+fn long_sequence_manifest_restores_metadata_and_both_payload_references() {
+    let (p, id) = project();
+    let s = snapshot(&p, id);
+    let tmp = tempfile::tempdir().unwrap();
+    let directory = tmp.path().join("long-sequence");
+    let mut extent = region();
+    extent.pixels = [2, 2];
+    let request = SequenceRequest {
+        range: TimeRange::new(t(0, 1), t(65, 100)).unwrap(),
+        frame_rate: FrameRate::new(100, 1).unwrap(),
+        region: extent,
+    };
+    let report = render_sequence(&s, &fonts(), &CpuReferenceBackend, request, &directory).unwrap();
+    assert_eq!(report.schema_version, 2);
+    assert!(report.frames.is_empty());
+    let manifest = report.frame_metadata.unwrap();
+    manifest.verify().unwrap();
+    for offset in [0, 63, 64] {
+        let page = manifest.read_page(offset, 2).unwrap();
+        for (number, (restored, files)) in page.frames.iter().zip(&page.files).enumerate() {
+            let ordinal = offset + number as u64;
+            let mut expected = render_frame(
+                &s,
+                &fonts(),
+                &CpuReferenceBackend,
+                FrameRequest {
+                    time: t(ordinal as i64, 100),
+                    region: extent,
+                },
+            )
+            .unwrap()
+            .metadata;
+            expected.frame_index = Some(ordinal.to_string());
+            expected.sequence_number = Some(ordinal);
+            assert_eq!(*restored, expected);
+            let files = files.as_ref().unwrap();
+            for file in [&files.numeric, &files.display] {
+                let bytes = std::fs::read(directory.join(&file.name)).unwrap();
+                assert_eq!(bytes.len() as u64, file.bytes);
+                assert_eq!(format!("{:x}", Sha256::digest(bytes)), file.sha256);
+            }
+            assert!(!directory.join(format!("frame-{ordinal:08}.json")).exists());
+        }
+    }
+}
+
+#[test]
 fn negative_fractional_range_end_exclusion_empty_and_overflow() {
     let rate = FrameRate::new(30000, 1001).unwrap();
     let range = TimeRange::new(t(-1, 10), rate.frame_to_time(2).unwrap()).unwrap();

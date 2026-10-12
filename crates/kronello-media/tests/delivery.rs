@@ -196,6 +196,59 @@ fn chapter_markers_transfer_into_mov_and_probe_roundtrips() {
 }
 
 #[test]
+fn mux_packet_cancellation_reclaims_stage_and_reuses_validated_private_probes() {
+    let runtime = MediaRuntime::load().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let (project, sequence) = project(16, 16);
+    let render = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence { sequence },
+        1,
+        RenderProfile::default(),
+    )
+    .unwrap();
+    let snapshot = primary_snapshot(&render);
+    let output = dir.path().join("cancel-mux.mov");
+    let mut export = request_at(output.clone(), 16, 16, ChapterPolicy::Transfer, vec![]);
+    export.range = range(t(0, 1), t(2, 1));
+    let collector = ExportDiagnosticsCollector::enabled();
+    let _scope = collector.activate();
+    let error = runtime
+        .export_delivery_with_checkpoint(
+            &[&snapshot],
+            Path::new("absent.kronello"),
+            &[],
+            &CpuReferenceBackend,
+            &export,
+            &mut |_| {
+                if collector
+                    .snapshot()
+                    .unwrap()
+                    .counts
+                    .get("mux_control_callbacks")
+                    .copied()
+                    .unwrap_or(0)
+                    >= 3
+                {
+                    Err(MediaError::InvalidInput(
+                        "cancel at mux packet boundary".into(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            },
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("cancel at mux packet boundary"));
+    let diagnostics = collector.snapshot().unwrap();
+    assert_eq!(diagnostics.counts["mux_reused_private_probes"], 2);
+    assert!(diagnostics.counts["mux_control_callbacks"] >= 3);
+    assert!(!output.exists());
+    assert!(!metadata_directory(&output).exists());
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
 fn chapters_drop_with_typed_warning_on_incapable_containers() {
     let runtime = MediaRuntime::load().unwrap();
     let dir = tempfile::tempdir().unwrap();

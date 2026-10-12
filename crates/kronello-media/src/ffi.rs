@@ -1034,6 +1034,8 @@ unsafe extern "C" {
         audio_channels: c_int,
         chapters: *const KmChapter,
         chapter_count: c_int,
+        checkpoint: Option<extern "C" fn(*mut c_void) -> c_int>,
+        checkpoint_data: *mut c_void,
     ) -> c_int;
 }
 
@@ -1520,6 +1522,7 @@ impl NativeRuntime {
         profile: MovieProfile,
         audio_channels: u32,
         chapters: &[crate::MediaChapter],
+        checkpoint: Option<&mut dyn FnMut() -> Result<(), MediaError>>,
     ) -> Result<(), MediaError> {
         let video = path_string(video)?;
         let audio = path_string(audio)?;
@@ -1559,7 +1562,13 @@ impl NativeRuntime {
         }
         // SAFETY: all strings, the chapter array and the runtime live
         // throughout the synchronous mux; titles outlive the call.
-        if unsafe {
+        let mut control = MuxControl {
+            checkpoint,
+            error: None,
+        };
+        let callback: Option<extern "C" fn(*mut c_void) -> c_int> =
+            control.checkpoint.as_ref().map(|_| mux_checkpoint as _);
+        let status = unsafe {
             km_mux_av(
                 self.0.as_ptr(),
                 video.as_ptr(),
@@ -1571,12 +1580,41 @@ impl NativeRuntime {
                 audio_channels,
                 native.as_ptr(),
                 native.len() as c_int,
+                callback,
+                (&mut control as *mut MuxControl<'_>).cast(),
             )
-        } < 0
-        {
+        };
+        if let Some(error) = control.error {
+            return Err(error);
+        }
+        if status < 0 {
             return Err(MediaError::Encode(self.error()));
         }
         Ok(())
+    }
+}
+struct MuxControl<'a> {
+    checkpoint: Option<&'a mut dyn FnMut() -> Result<(), MediaError>>,
+    error: Option<MediaError>,
+}
+extern "C" fn mux_checkpoint(data: *mut c_void) -> c_int {
+    // SAFETY: km_mux_av invokes this only synchronously with the live,
+    // uniquely borrowed control supplied by NativeRuntime::mux_av.
+    let control = unsafe { &mut *data.cast::<MuxControl<'_>>() };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        kronello_render::count_execution("mux_control_callbacks", 1);
+        control.checkpoint.as_mut().expect("enabled mux callback")()
+    }));
+    match result {
+        Ok(Ok(())) => 0,
+        Ok(Err(error)) => {
+            control.error = Some(error);
+            -1
+        }
+        Err(_) => {
+            control.error = Some(MediaError::Encode("mux checkpoint panicked".into()));
+            -1
+        }
     }
 }
 /// Round a nonnegative rational time to 1/48000 master-clock ticks, half up.

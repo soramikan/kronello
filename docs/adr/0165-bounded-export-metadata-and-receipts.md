@@ -1,6 +1,6 @@
 # ADR-0165: 長尺frame metadataとpublication receiptの有界化
 
-- 状態: 採用（movie/GIFの接続を実装、PERF-013受け入れ進行中）
+- 状態: 部分置換（[ADR-0166](0166-bounded-sequence-metadata.md): image sequence除外の拡張。movie/GIF・receipt・muxの決定は維持）
 - 日付: 2026-10-12
 - 対象: PERF-013
 - 後続: ADR-0079、ADR-0133

@@ -66,6 +66,109 @@ fn long_metadata_job_pages_survive_prune_and_reject_corrupted_payload() {
         f.service(json!({"operation":"job.frames","job":submitted.id,"offset":63,"limit":2}));
     assert_eq!(after, page);
 }
+
+#[test]
+fn long_image_sequence_pages_keep_file_refs_and_survive_prune() {
+    let f = Fixture::new();
+    let output = f.temp.path().join("paged-sequence");
+    let mut render = f.render(&output);
+    render["range"]["end"] = json!({"num":"65","den":"100"});
+    render["frame_rate"] = json!({"num":"100","den":"1"});
+    render["input"]["region"]["pixels"] = json!([2, 2]);
+    let submitted = f.submit_request(
+        json!({"operation":"render.submit","render":render}),
+        None,
+        false,
+    );
+    let finished = f.wait(&submitted.id, JobStatus::Succeeded);
+    let report = &finished.result.as_ref().unwrap()["report"];
+    assert_eq!(report["schema_version"], 2);
+    assert!(report["frames"].as_array().unwrap().is_empty());
+    let page =
+        f.service(json!({"operation":"job.frames","job":submitted.id,"offset":63,"limit":2}));
+    assert_eq!(page["files"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        page["files"][0]["numeric"]["name"],
+        "frame-00000063.rgba16f"
+    );
+    assert_eq!(page["frames"][1]["frame_index"], "64");
+    let saved: Value =
+        serde_json::from_slice(&std::fs::read(output.join("sequence.json")).unwrap()).unwrap();
+    assert_eq!(saved, *report);
+    let mut config = JobConfig::at(&f.state);
+    config.retention = Duration::ZERO;
+    JobStore::open(config).unwrap().prune().unwrap();
+    assert_eq!(
+        f.service(json!({"operation":"job.frames","job":submitted.id,"offset":63,"limit":2})),
+        page
+    );
+}
+#[test]
+fn chunked_sequence_cancel_and_kill_reclaim_private_chunks_and_resume() {
+    for cancel in [true, false] {
+        let mut f = Fixture::new();
+        f.gate_after_frame = 65;
+        let output = f.temp.path().join("interrupted-sequence");
+        let mut render = f.render(&output);
+        render["range"]["end"] = json!({"num":"66","den":"100"});
+        render["frame_rate"] = json!({"num":"100","den":"1"});
+        render["input"]["region"]["pixels"] = json!([2, 2]);
+        let submitted = f.submit_request(
+            json!({"operation":"render.submit","render":render}),
+            Some(&f.temp.path().join("never")),
+            false,
+        );
+        let running = f.wait(&submitted.id, JobStatus::Running);
+        let staging = output.parent().unwrap().join(format!(
+            ".kronello-job-{}-{}-{}",
+            submitted.id, submitted.input_hash, submitted.attempt
+        ));
+        let start = Instant::now();
+        while f.store().get(&submitted.id).unwrap().completed_frames < 65 {
+            assert!(start.elapsed() < f.wait_timeout);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            std::fs::read_dir(staging.join("output"))
+                .unwrap()
+                .any(|entry| {
+                    entry
+                        .unwrap()
+                        .path()
+                        .join("frames/chunk-0000000000.json")
+                        .exists()
+                })
+        );
+        let guard = kronello_platform::ProcessGuard::capture(running.worker_pid.unwrap()).unwrap();
+        if cancel {
+            f.service(json!({"operation":"job.cancel","job":submitted.id}));
+            f.wait(&submitted.id, JobStatus::Canceled);
+            guard.wait_for_exit(f.wait_timeout).unwrap();
+            assert!(!staging.exists());
+        } else {
+            guard.terminate_and_wait().unwrap();
+            f.expire_terminated_worker(&running);
+            f.wait(&submitted.id, JobStatus::Interrupted);
+        }
+        assert!(!output.exists());
+        f.gate_after_frame = 0;
+        let resumed: JobRecord = serde_json::from_value(f.cli(
+            json!({"operation":"job.resume","job":submitted.id}),
+            None,
+            false,
+        ))
+        .unwrap();
+        assert_eq!(resumed.attempt, 1);
+        let done = f.wait(&submitted.id, JobStatus::Succeeded);
+        assert_eq!(done.completed_frames, 66);
+        assert_eq!(done.snapshot_hash, submitted.snapshot_hash);
+        assert!(!staging.exists());
+        let page =
+            f.service(json!({"operation":"job.frames","job":submitted.id,"offset":63,"limit":2}));
+        assert_eq!(page["frames"].as_array().unwrap().len(), 2);
+    }
+}
+
 impl Fixture {
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
@@ -346,19 +449,29 @@ fn recovery_fault_case(device_lost: bool) {
 
 #[test]
 fn recovery_reconciles_rename_before_database_commit_only_after_artifact_verification() {
-    for movie in [false, true] {
-        recovery_rename_case(movie);
+    for (movie, frames) in [(false, 3), (true, 3), (false, 65), (true, 65)] {
+        recovery_rename_case(movie, frames);
     }
 }
-fn recovery_rename_case(movie: bool) {
+fn recovery_rename_case(movie: bool, frames: u64) {
     let mut f = Fixture::new();
     f.after_rename_gate = Some(f.temp.path().join("never-after-rename"));
     let gate = f.temp.path().join("before-render");
-    let submitted = if movie {
-        f.submit_request(json!({"operation":"render.submit","render":f.render(&f.temp.path().join("rename-window.mov")),"output":{"format":"pro_res_mov","clips":[],"background":[0.1,0.1,0.1]}}), Some(&gate), false)
+    let mut render = f.render(&f.temp.path().join(if movie {
+        "rename-window.mov"
     } else {
-        f.submit("rename-window", Some(&gate))
-    };
+        "rename-window"
+    }));
+    if frames > 3 {
+        render["range"]["end"] = json!({"num":frames.to_string(),"den":"100"});
+        render["frame_rate"] = json!({"num":"100","den":"1"});
+        render["input"]["region"]["pixels"] = json!([2, 2]);
+    }
+    let mut request = json!({"operation":"render.submit","render":render});
+    if movie {
+        request["output"] = json!({"format":"pro_res_mov","clips":[],"background":[0.1,0.1,0.1]});
+    }
+    let submitted = f.submit_request(request, Some(&gate), false);
     let running = f.wait(&submitted.id, JobStatus::Running);
     let guard = kronello_platform::ProcessGuard::capture(running.worker_pid.unwrap()).unwrap();
     std::fs::write(gate, b"go").unwrap();
@@ -370,7 +483,11 @@ fn recovery_rename_case(movie: bool) {
     guard.terminate_and_wait().unwrap();
     f.expire_terminated_worker(&running);
     f.wait(&submitted.id, JobStatus::Interrupted);
-    let manifest = if movie {
+    let manifest = if frames > 3 && movie {
+        kronello_media::metadata_directory(&submitted.destination).join("chunk-0000000000.json")
+    } else if frames > 3 {
+        submitted.destination.join("frames/chunk-0000000000.json")
+    } else if movie {
         submitted.destination.clone()
     } else {
         submitted.destination.join("sequence.json")
@@ -398,7 +515,7 @@ fn recovery_rename_case(movie: bool) {
     .unwrap();
     assert_eq!(reconciled.status, JobStatus::Succeeded);
     assert_eq!(reconciled.worker_pid, running.worker_pid);
-    assert_eq!(reconciled.completed_frames, 3);
+    assert_eq!(reconciled.completed_frames, frames);
     assert_eq!(reconciled.result.unwrap()["validated"], true);
 }
 

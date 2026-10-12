@@ -1052,10 +1052,11 @@ uint32_t km_mux_video_tag(int profile) { return (profile==3 || profile==5)?MKTAG
 typedef struct { int64_t start; int64_t end; const char *title; } KmChapter;
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     const char *render_hash,const char *export_hash,int profile,int audio_channels,
-    const KmChapter *chapters,int chapter_count) {
+    const KmChapter *chapters,int chapter_count,int (*checkpoint)(void *),void *checkpoint_data) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
     AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
-    int ret=0;
+    int ret=0;uint64_t copied_packets=0;
+    if(checkpoint && checkpoint(checkpoint_data)<0)return fail(k,AVERROR_EXIT,"mux canceled");
     /* Closed profile matrix: 0-7 are the pre-MEDIA-004 movie profiles,
      * 8 = DNxHR/PCM24 MOV and 9 = DNxHR/PCM24 MXF delivery remuxes. */
     const enum AVCodecID videos[10]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,
@@ -1142,6 +1143,9 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"mux header");goto done;}
     for(int i=0;i<2;++i){ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}}
     while(ready[0] || ready[1]) {
+        if((copied_packets%64)==0 && checkpoint && checkpoint(checkpoint_data)<0) {
+            ret=fail(k,AVERROR_EXIT,"mux canceled");goto done;
+        }
         int i=!ready[0]?1:!ready[1]?0:
             (k->av_compare_ts(packets[0]->dts,input[0]->streams[index[0]]->time_base,
                 packets[1]->dts,input[1]->streams[index[1]]->time_base)<=0?0:1);
@@ -1149,8 +1153,10 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
         packets[i]->stream_index=streams[i]->index;packets[i]->pos=-1;
         ret=k->av_interleaved_write_frame(out,packets[i]);k->av_packet_unref(packets[i]);
         if(ret<0){fail(k,ret,"mux write packet");goto done;}
+        ++copied_packets;
         ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}
     }
+    if(checkpoint && checkpoint(checkpoint_data)<0){ret=fail(k,AVERROR_EXIT,"mux canceled");goto done;}
     ret=k->av_write_trailer(out);if(ret<0){fail(k,ret,"mux trailer");goto done;}
     ret=k->avio_closep(&out->pb);if(ret<0)fail(k,ret,"mux output close");
 done:

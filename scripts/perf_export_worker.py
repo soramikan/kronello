@@ -88,22 +88,41 @@ def process_usage(pid):
     return {"method": "ps_rss", "rss_bytes": int(result.stdout.strip()) * 1024} if result.stdout.strip() else None
 
 
-def frame_metadata_digest(binary, backend, env, job, report):
+def frame_metadata_digest(binary, backend, env, job, report, sequence_root=None):
     """Stream semantic metadata independently of inline/manifest storage."""
     manifest = report.get("frame_metadata")
     total = manifest["identity"]["frame_count"] if manifest else len(report["frames"])
     sha = hashlib.sha256()
     count = 0
     first = last = None
+    files_sha = hashlib.sha256()
+    file_count = 0
+    sequence = "frame_grid" in report
     offset = 0
     while offset < total:
         if manifest:
             page = call(binary, backend, env, "job.frames", job=job, offset=offset, limit=64)
             frames = page["frames"]
             assert page["total_frames"] == total and page["offset"] == offset
+            files = page.get("files", [])
         else:
             frames = report["frames"][offset:offset + 64]
+            files = [{k: frame[k] for k in ("numeric", "display")} for frame in frames] if sequence else []
+            if sequence:
+                frames = [frame["metadata"] for frame in frames]
         assert frames
+        if sequence:
+            assert len(files) == len(frames)
+            for refs in files:
+                for kind in ("numeric", "display"):
+                    ref = refs[kind]
+                    path = Path(sequence_root) / ref["name"]
+                    assert path.stat().st_size == ref["bytes"]
+                    assert digest(path) == ref["sha256"]
+                data = canonical(refs)
+                files_sha.update(len(data).to_bytes(8, "little"))
+                files_sha.update(data)
+                file_count += 2
         for frame in frames:
             # Execution observations can change while numeric/time/locks stay
             # identical; they are not authored or semantic metadata identity.
@@ -117,7 +136,10 @@ def frame_metadata_digest(binary, backend, env, job, report):
             count += 1
         offset += len(frames)
     assert count == total
-    return {"count": count, "sha256": sha.hexdigest(), "first": first, "last": last}
+    result = {"count": count, "sha256": sha.hexdigest(), "first": first, "last": last}
+    if sequence:
+        result.update(payload_file_count=file_count, payload_refs_sha256=files_sha.hexdigest())
+    return result
 
 
 def independent_oracle(path, ffmpeg, ffprobe):
@@ -301,9 +323,10 @@ def run_trial(binary, case, project, directory, backend, timeout, ffmpeg, ffprob
                 "sampled_worker_peak_rss_bytes": max_rss or None,
                 "sampled_worker_rss_progress_windows": rss_windows,
                 "sampled_worker_usage_last": usage_last,
-                "frame_metadata_semantic": frame_metadata_digest(binary, backend, env, job, report),
+                "frame_metadata_semantic": frame_metadata_digest(binary, backend, env, job, report, paths[0]),
                 "output_paths": [str(p) for p in paths],
-                "oracles": [independent_oracle(p, ffmpeg, ffprobe) for p in paths] if verify_outputs else []}
+                "oracles": [independent_oracle(p, ffmpeg, ffprobe) for p in paths]
+                if verify_outputs and "frame_grid" not in report else []}
     except BaseException:
         call(binary, backend, env, "job.cancel", job=job)
         raise
@@ -333,6 +356,47 @@ def frame_stage_summary(report):
                       warm_frame_render_p95_us=percentile(values[1:], 0.95))
     return result
 
+
+def compare_evidence(evidence):
+    evidence["summary"] = {}
+    for mode in ("before", "after"):
+        trials = [t for t in evidence["trials"] if t["mode"] == mode]
+        warm = [t["succeeded_ms"] for t in trials[1:]]
+        evidence["summary"][mode] = {"first_ms": trials[0]["succeeded_ms"],
+                                     "frame_stage": frame_stage_summary(trials[-1]["report"]),
+                                     "subsequent_p50_ms": percentile(warm, 0.5),
+                                     "subsequent_p95_ms": percentile(warm, 0.95)}
+    pairs = [[t for t in evidence["trials"] if t["pair"] == pair]
+             for pair in range(max(t["pair"] for t in evidence["trials"]) + 1)]
+    for pair in pairs:
+        assert len(pair) == 2 and {t["mode"] for t in pair} == {"before", "after"}, "complete A/B pair"
+        sequence = "frame_grid" in pair[0]["report"]
+        assert sequence == ("frame_grid" in pair[1]["report"]), "same output kind"
+        for identity in (() if sequence else ("render_snapshot_hash", "export_snapshot_hash")):
+            assert pair[0]["report"][identity] == pair[1]["report"][identity], identity
+        range_key = "frame_grid" if sequence else "sample_range"
+        assert pair[0]["report"][range_key] == pair[1]["report"][range_key]
+        if sequence:
+            for field in ("range", "frame_rate"):
+                assert pair[0]["report"][field] == pair[1]["report"][field]
+        assert pair[0]["frame_metadata_semantic"] == pair[1]["frame_metadata_semantic"], "semantic frame metadata"
+        for left, right in zip(pair[0]["oracles"], pair[1]["oracles"], strict=True):
+            assert semantic_streams(left) == semantic_streams(right), "decoded bits / PTS / layout / color / priming"
+            assert left["snapshot_tags"] == right["snapshot_tags"], "container identity"
+            assert left["chapters"] == right["chapters"], "chapters"
+    evidence["comparison"] = {"all_decoded_bits_pts_layout_equal": None if sequence else True,
+                              "sequence_payloads_verified": sequence,
+                              "all_semantic_frame_metadata_equal": True,
+                              "all_snapshot_hashes_equal": True,
+                              "all_chapters_and_packet_side_data_equal": None if sequence else True,
+                              "all_packet_payload_equal": None if sequence else all(
+                                  left['streams'] == right['streams']
+                                  for pair in pairs for left, right in
+                                  zip(pair[0]['oracles'], pair[1]['oracles'], strict=True)),
+                              "all_encoded_bytes_equal": None if sequence else all(
+                                  left["encoded_sha256"] == right["encoded_sha256"]
+                                  for pair in pairs for left, right in
+                                  zip(pair[0]["oracles"], pair[1]["oracles"], strict=True))}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -403,37 +467,7 @@ def main():
                 raise RuntimeError("benchmark binary changed during measurement")
             evidence["trials"].append({"pair": pair, "mode": mode, **result})
             receipt.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n")
-    evidence["summary"] = {}
-    for mode in binaries:
-        trials = [t for t in evidence["trials"] if t["mode"] == mode]
-        warm = [t["succeeded_ms"] for t in trials[1:]]
-        evidence["summary"][mode] = {"first_ms": trials[0]["succeeded_ms"],
-                                     "frame_stage": frame_stage_summary(trials[-1]["report"]),
-                                     "subsequent_p50_ms": percentile(warm, 0.5),
-                                     "subsequent_p95_ms": percentile(warm, 0.95)}
-    pairs = [[t for t in evidence["trials"] if t["pair"] == pair]
-             for pair in range(args.pairs)]
-    for pair in pairs:
-        for identity in ("render_snapshot_hash", "export_snapshot_hash"):
-            assert pair[0]["report"][identity] == pair[1]["report"][identity], identity
-        assert pair[0]["report"]["sample_range"] == pair[1]["report"]["sample_range"]
-        assert pair[0]["frame_metadata_semantic"] == pair[1]["frame_metadata_semantic"], "semantic frame metadata"
-        for left, right in zip(pair[0]["oracles"], pair[1]["oracles"], strict=True):
-            assert semantic_streams(left) == semantic_streams(right), "decoded bits / PTS / layout / color / priming"
-            assert left["snapshot_tags"] == right["snapshot_tags"], "container identity"
-            assert left["chapters"] == right["chapters"], "chapters"
-    evidence["comparison"] = {"all_decoded_bits_pts_layout_equal": True,
-                              "all_semantic_frame_metadata_equal": True,
-                              "all_snapshot_hashes_equal": True,
-                              "all_chapters_and_packet_side_data_equal": True,
-                              "all_packet_payload_equal": all(
-                                  left['streams'] == right['streams']
-                                  for pair in pairs for left, right in
-                                  zip(pair[0]['oracles'], pair[1]['oracles'], strict=True)),
-                              "all_encoded_bytes_equal": all(
-                                  left["encoded_sha256"] == right["encoded_sha256"]
-                                  for pair in pairs for left, right in
-                                  zip(pair[0]["oracles"], pair[1]["oracles"], strict=True))}
+    compare_evidence(evidence)
     receipt.write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(evidence["summary"], indent=2))
 

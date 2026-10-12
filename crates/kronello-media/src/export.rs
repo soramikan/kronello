@@ -1144,6 +1144,8 @@ impl MediaRuntime {
             profile,
             audio_layout,
             chapters,
+            None,
+            None,
         )?;
         temp.as_file().sync_all()?;
         publish_file(temp, output)?;
@@ -1163,6 +1165,8 @@ impl MediaRuntime {
         profile: MovieProfile,
         audio_layout: kronello_model::ChannelMask,
         chapters: &[MediaChapter],
+        prepared: Option<(&MediaProbe, &MediaProbe)>,
+        checkpoint: Option<&mut dyn FnMut() -> Result<(), MediaError>>,
     ) -> Result<(tempfile::NamedTempFile, MediaProbe), MediaError> {
         for hash in [render_hash, export_hash] {
             if hash.len() != 64
@@ -1177,8 +1181,14 @@ impl MediaRuntime {
         }
         let video = video.canonicalize()?;
         let audio = audio.canonicalize()?;
-        let video_input = self.probe(&video)?;
-        let audio_input = self.probe(&audio)?;
+        let fresh;
+        let (video_input, audio_input) = if let Some(inputs) = prepared {
+            kronello_render::count_execution("mux_reused_private_probes", 2);
+            inputs
+        } else {
+            fresh = (self.probe(&video)?, self.probe(&audio)?);
+            (&fresh.0, &fresh.1)
+        };
         let video_stream = video_input
             .streams
             .iter()
@@ -1207,6 +1217,7 @@ impl MediaRuntime {
             profile,
             audio_layout.channels() as u32,
             chapters,
+            checkpoint,
         )?;
         let probe = self.probe(temp.path())?;
         probe.verify_movie_layout(profile, audio_layout)?;
@@ -1790,6 +1801,8 @@ impl MediaRuntime {
                         leg.profile,
                         leg.snapshot.audio_layout,
                         &leg_chapters[index],
+                        Some((&video_probe, &audio_probe)),
+                        Some(&mut || checkpoint(frame_count as u64)),
                     )?;
                     staged[index] = Some(temp);
                     probes[index] = Some(probe);

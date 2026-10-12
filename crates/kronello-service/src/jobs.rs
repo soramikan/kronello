@@ -548,6 +548,8 @@ pub struct JobFramesResult {
     pub offset: u64,
     pub next_offset: Option<u64>,
     pub frames: Vec<kronello_render::FrameMetadata>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<Option<kronello_render::SequenceFrameFiles>>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -834,14 +836,28 @@ impl Service<'_> {
         if let Some(value) = report.get("frame_metadata") {
             let manifest: kronello_render::FrameMetadataManifest =
                 serde_json::from_value(value.clone())?;
-            let export: kronello_media::AvExportRequest =
-                serde_json::from_value(report["request"].clone())?;
-            let plan = frame_sample_plan(export.range, export.frame_rate)?;
-            if manifest.root != kronello_media::metadata_directory(&record.destination)
+            let sequence = report.get("frame_grid").is_some();
+            let (range, rate) = if sequence {
+                (
+                    serde_json::from_value(report["range"].clone())?,
+                    serde_json::from_value(report["frame_rate"].clone())?,
+                )
+            } else {
+                let export: kronello_media::AvExportRequest =
+                    serde_json::from_value(report["request"].clone())?;
+                (export.range, export.frame_rate)
+            };
+            let plan = frame_sample_plan(range, rate)?;
+            let root = if sequence {
+                record.destination.join("frames")
+            } else {
+                kronello_media::metadata_directory(&record.destination)
+            };
+            if manifest.root != root
                 || manifest.identity.render_snapshot_hash != record.snapshot_hash
                 || manifest.identity.frame_count != record.total_frames
                 || manifest.identity.frame_count != plan.frame_count() as u64
-                || manifest.identity.frame_rate != export.frame_rate
+                || manifest.identity.frame_rate != rate
                 || manifest.identity.start_frame != plan.start_frame()
             {
                 return Err(ServiceError::new(
@@ -871,6 +887,7 @@ impl Service<'_> {
                 offset: request.offset,
                 next_offset: page.next_offset,
                 frames: page.frames,
+                files: page.files,
             })
         } else {
             // Legacy inline receipts remain readable without converting their
@@ -883,6 +900,7 @@ impl Service<'_> {
                 return Err(ServiceError::invalid("frame page offset"));
             }
             let mut frames = Vec::new();
+            let mut files = Vec::new();
             let mut bytes = 0;
             for value in inline
                 .iter()
@@ -900,7 +918,15 @@ impl Service<'_> {
                     break;
                 }
                 bytes += size;
-                frames.push(serde_json::from_value(value.clone())?);
+                if let Some(metadata) = value.get("metadata") {
+                    frames.push(serde_json::from_value(metadata.clone())?);
+                    files.push(Some(kronello_render::SequenceFrameFiles {
+                        numeric: serde_json::from_value(value["numeric"].clone())?,
+                        display: serde_json::from_value(value["display"].clone())?,
+                    }));
+                } else {
+                    frames.push(serde_json::from_value(value.clone())?);
+                }
             }
             let next = request.offset + frames.len() as u64;
             Ok(JobFramesResult {
@@ -910,6 +936,7 @@ impl Service<'_> {
                 offset: request.offset,
                 next_offset: (next < inline.len() as u64).then_some(next),
                 frames,
+                files,
             })
         }
     }
@@ -2086,8 +2113,17 @@ impl Service<'_> {
         if let Some(value) = result_json["report"].get("frame_metadata") {
             let manifest: kronello_render::FrameMetadataManifest =
                 serde_json::from_value(value.clone())?;
-            let source = kronello_media::metadata_directory(&publication[0].0);
-            let target = kronello_media::metadata_directory(destination);
+            let sequence = matches!(request.output, JobOutput::ImageSequence);
+            let source = if sequence {
+                publication[0].0.join("frames")
+            } else {
+                kronello_media::metadata_directory(&publication[0].0)
+            };
+            let target = if sequence {
+                destination.join("frames")
+            } else {
+                kronello_media::metadata_directory(destination)
+            };
             if manifest.root != source
                 || manifest.identity.render_snapshot_hash != record.snapshot_hash
                 || manifest.identity.frame_count != record.total_frames
@@ -2106,7 +2142,16 @@ impl Service<'_> {
             manifest.verify()?;
             result_json["report"]["frame_metadata"] =
                 serde_json::to_value(manifest.relocated(target.clone()))?;
-            publication.push((source, target));
+            if sequence {
+                // The metadata directory moves with the sequence root. Its
+                // small manifest must describe final paths before hashing.
+                std::fs::write(
+                    publication[0].0.join("sequence.json"),
+                    serde_json::to_vec_pretty(&result_json["report"])?,
+                )?;
+            } else {
+                publication.push((source, target));
+            }
         }
         let receipt = diagnostics.time("publication_receipt_hash_write");
         store.prepare_publication_bundle(record, &publication, result_json.clone())?;
@@ -2134,7 +2179,12 @@ fn validate_sequence(
     count: u64,
     snapshot_hash: &str,
 ) -> Result<(), ServiceError> {
-    if metadata.frames.len() as u64 != count {
+    if metadata
+        .frame_metadata
+        .as_ref()
+        .map_or(metadata.frames.len() as u64, |m| m.identity.frame_count)
+        != count
+    {
         return Err(ServiceError::new(
             "OUTPUT_VALIDATION_FAILED",
             "frame count differs",
@@ -2147,6 +2197,50 @@ fn validate_sequence(
             "OUTPUT_VALIDATION_FAILED",
             "manifest differs",
         ));
+    }
+    if let Some(manifest) = &metadata.frame_metadata {
+        let plan = frame_sample_plan(metadata.range, metadata.frame_rate)?;
+        if metadata.schema_version != 2
+            || !metadata.frames.is_empty()
+            || manifest.root != path.join("frames")
+            || manifest.identity.render_snapshot_hash != snapshot_hash
+            || manifest.identity.frame_rate != metadata.frame_rate
+            || manifest.identity.start_frame != plan.start_frame()
+            || manifest.identity.frame_count != plan.frame_count() as u64
+        {
+            return Err(ServiceError::new(
+                "OUTPUT_VALIDATION_FAILED",
+                "sequence metadata identity",
+            ));
+        }
+        manifest.for_each_frame(|_, _, files| {
+            let files = files.ok_or_else(|| kronello_render::RenderError::Backend {
+                code: "OUTPUT_VALIDATION_FAILED",
+                message: "missing sequence file references".into(),
+            })?;
+            for artifact in [&files.numeric, &files.display] {
+                let mut file = std::fs::File::open(path.join(&artifact.name))?;
+                let mut sha = Sha256::new();
+                let mut size = 0_u64;
+                let mut buffer = [0; 65536];
+                loop {
+                    let n = std::io::Read::read(&mut file, &mut buffer)?;
+                    if n == 0 {
+                        break;
+                    }
+                    sha.update(&buffer[..n]);
+                    size += n as u64;
+                }
+                if size != artifact.bytes || format!("{:x}", sha.finalize()) != artifact.sha256 {
+                    return Err(kronello_render::RenderError::Backend {
+                        code: "OUTPUT_VALIDATION_FAILED",
+                        message: "sequence artifact differs".into(),
+                    });
+                }
+            }
+            Ok(())
+        })?;
+        return Ok(());
     }
     for frame in &metadata.frames {
         if frame.metadata.snapshot_content_hash != snapshot_hash {

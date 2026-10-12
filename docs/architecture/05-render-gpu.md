@@ -460,3 +460,7 @@ Unixのnative sessionは共有serviceのsnapshot・font bytes・parsed LUTをrev
 ### PERF-005 の有界hardware cursor
 
 strict resident backendはlocal fileの圧縮decode-order metadataを一度走査し、実測PTSのglobal reorder gapによるwatermarkとVT waitを使って正確な提示を証明する。圧縮sampleは一つずつ読み、順方向はhardware sessionと有界future outputを再利用する。backwardは同じoriginから再openする。node/instance・全asset lock・streamごとの最大8cursor、保持output合計512MiB、各cursor/callback64outputsとsingle compressed sample128MiBを超える場合は型付き失敗またはpool退避とする。返却frameとGPU import、native codec/AVFoundation内部は保持payload予算外で、RSS上限を主張しない。source fingerprintと既存前後asset hash/color/dimensions検査を維持する。一発native oracleとProRes RAWは既存全clip上限の経路を維持する。詳細とCPU検証oracleのSDR clamp修正は[ADR-0156](../adr/0156-bounded-persistent-hardware-cursor.md)。最終受け入れとGPU範囲/寿命最適化は[PERF-005](../testing/perf-005.md)で別に確認する。
+
+## 長い画像連番のmetadata
+
+[ADR-0166](../adr/0166-bounded-sequence-metadata.md)に従い、連番の時刻は有理数frame planで逐次生成し、inline64件/1MiB超過時のmetadataとnumeric/display参照は共通headerと64件/4MiB chunkへ保存する。全frame reportを保持せず、最終sequence JSONは小さいdescriptorを返す。両画素形式とframe index/time/hashは維持し、workerのpublication/recoveryは全画素fileを逐次照合する。短いversion1のframe JSONと旧reader互換経路を残す。ページAPIと確定順は[14](14-jobs.md)を参照する。

@@ -72,7 +72,7 @@ impl FrameMetadataIdentity {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FrameMetadataManifest {
     pub schema_version: u32,
@@ -105,6 +105,7 @@ pub struct FrameMetadataPage {
     pub offset: u64,
     pub next_offset: Option<u64>,
     pub frames: Vec<FrameMetadata>,
+    pub files: Vec<Option<crate::SequenceFrameFiles>>,
 }
 
 /// Owns a newly-created private directory. Incomplete writes remove only it.
@@ -153,10 +154,20 @@ impl FrameMetadataWriter {
         self.record_bytes
     }
     pub fn push(&mut self, frame: FrameMetadata) -> Result<(), RenderError> {
+        self.push_with_files(frame, None)
+    }
+    pub fn push_with_files(
+        &mut self,
+        frame: FrameMetadata,
+        files: Option<crate::SequenceFrameFiles>,
+    ) -> Result<(), RenderError> {
         self.identity.check_frame(&frame, self.count)?;
         let Value::Object(mut delta) = serde_json::to_value(frame)? else {
             unreachable!()
         };
+        if let Some(files) = files {
+            delta.insert("__sequence_files".into(), serde_json::to_value(files)?);
+        }
         let mut common = Map::new();
         for key in COMMON {
             common.insert(
@@ -281,7 +292,17 @@ impl FrameMetadataManifest {
         }
     }
     pub fn verify(&self) -> Result<(), RenderError> {
-        self.visit(None, |_, _| Ok(()))
+        self.visit(None, |_, _, _| Ok(()))
+    }
+    pub fn for_each_frame(
+        &self,
+        visit: impl FnMut(
+            u64,
+            FrameMetadata,
+            Option<crate::SequenceFrameFiles>,
+        ) -> Result<(), RenderError>,
+    ) -> Result<(), RenderError> {
+        self.visit(None, visit)
     }
     pub fn read_page(&self, offset: u64, limit: usize) -> Result<FrameMetadataPage, RenderError> {
         if offset > self.identity.frame_count || !(1..=FRAME_METADATA_CHUNK_FRAMES).contains(&limit)
@@ -291,34 +312,47 @@ impl FrameMetadataManifest {
             ));
         }
         let mut frames = Vec::new();
+        let mut files = Vec::new();
         let mut bytes = 0;
         let mut full = false;
-        self.visit(Some(offset..offset + limit as u64), |number, frame| {
-            if number >= offset && frames.len() < limit && !full {
-                let size = serde_json::to_vec(&frame)?.len();
-                if size > FRAME_METADATA_PAGE_BYTES {
-                    return Err(budget("single metadata page frame"));
+        self.visit(
+            Some(offset..offset + limit as u64),
+            |number, frame, refs| {
+                if number >= offset && frames.len() < limit && !full {
+                    let size = serde_json::to_vec(&frame)?.len() + serde_json::to_vec(&refs)?.len();
+                    if size > FRAME_METADATA_PAGE_BYTES {
+                        return Err(budget("single metadata page frame"));
+                    }
+                    if bytes + size > FRAME_METADATA_PAGE_BYTES {
+                        full = true;
+                    } else {
+                        bytes += size;
+                        frames.push(frame);
+                        files.push(refs);
+                    }
                 }
-                if bytes + size > FRAME_METADATA_PAGE_BYTES {
-                    full = true;
-                } else {
-                    bytes += size;
-                    frames.push(frame);
-                }
-            }
-            Ok(())
-        })?;
+                Ok(())
+            },
+        )?;
         let next = offset + frames.len() as u64;
+        if files.iter().all(Option::is_none) {
+            files.clear();
+        }
         Ok(FrameMetadataPage {
             offset,
             next_offset: (next < self.identity.frame_count).then_some(next),
             frames,
+            files,
         })
     }
     fn visit(
         &self,
         page: Option<std::ops::Range<u64>>,
-        mut visit: impl FnMut(u64, FrameMetadata) -> Result<(), RenderError>,
+        mut visit: impl FnMut(
+            u64,
+            FrameMetadata,
+            Option<crate::SequenceFrameFiles>,
+        ) -> Result<(), RenderError>,
     ) -> Result<(), RenderError> {
         self.identity.validate()?;
         if self.schema_version != 2
@@ -401,7 +435,19 @@ impl FrameMetadataManifest {
             if records.len() != entry.count as usize {
                 return Err(invalid("frame chunk count"));
             }
-            for delta in records {
+            for mut delta in records {
+                let files: Option<crate::SequenceFrameFiles> = delta
+                    .remove("__sequence_files")
+                    .map(serde_json::from_value)
+                    .transpose()?;
+                if let Some(files) = &files
+                    && (files.numeric.name != format!("frame-{number:08}.rgba16f")
+                        || files.display.name != format!("frame-{number:08}.png")
+                        || !sha_valid(&files.numeric.sha256)
+                        || !sha_valid(&files.display.sha256))
+                {
+                    return Err(invalid("sequence frame file references"));
+                }
                 if delta.keys().any(|key| header.common.contains_key(key)) {
                     return Err(invalid("frame delta overwrites common header"));
                 }
@@ -409,7 +455,14 @@ impl FrameMetadataManifest {
                 object.extend(delta);
                 let frame: FrameMetadata = serde_json::from_value(Value::Object(object))?;
                 self.identity.check_frame(&frame, number)?;
-                visit(number, frame)?;
+                if let Some(files) = &files {
+                    let size =
+                        u64::from(frame.region.pixels[0]) * u64::from(frame.region.pixels[1]) * 8;
+                    if files.numeric.bytes != size {
+                        return Err(invalid("sequence numeric payload length"));
+                    }
+                }
+                visit(number, frame, files)?;
                 number += 1;
             }
             ordinal += 1;

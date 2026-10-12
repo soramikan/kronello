@@ -1,6 +1,6 @@
 # PERF-013: 長尺metadata・receipt・mux確定工程
 
-状態: `in_progress`。PERF-011/012の必須検証・受け入れを完了し、実装を進めている。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF接続は実装済みだが、image sequenceとmux/追加復旧条件の完了を意味しない。
+状態: `in_progress`。[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)のmovie/GIF・receiptと[ADR-0166](../adr/0166-bounded-sequence-metadata.md)の画像連番、およびprobe再利用・mux取消を実装した。以下の初期記録と追加検証を区別し、10,000frame画像連番比較と最終workspace testの完了を待つ。
 
 ## 変更前の実worker基準
 
@@ -65,3 +65,21 @@ movie/GIFのexportは64件/1MiBを超えるmetadataをmanifestへ保存し、rep
 sourceはclipを持たない軽いCPU fixtureであり、静穏hostを保証しない。movie全般の速度改善率ではない。index/chunk読込・保持の上限は実装試験とRSSで別に確認する。新binaryにはSQLite修正も含まれるため、時間差をmetadata変更だけの因果へ分解した数値とは扱わない。
 
 残件はimage sequenceの全frame report保持、長尺のcancel/kill/旧復旧とquery保持の追加条件、probe再利用/mux取消、最終必須検証と設計採用である。PERF-013をdoneにしない。
+
+## 画像連番とmuxの追加実装・検証（2026-10-13）
+
+[ADR-0166](../adr/0166-bounded-sequence-metadata.md)で画像連番へ同じinline/chunk境界を適用した。version2は個別frame JSONと全frame reportを保持せず、差分chunkにnumeric/displayの生成名・bytes・SHA-256を含める。`job.frames.files`はmetadataと同順で参照を返し、publication/recoveryは両画素fileを64KiB bufferで逐次検証する。最終pathへrelocateしたsequence JSONをreceipt hashより先に保存し、manifest directoryはprimary outputと一緒に公開する。
+
+[1,000frame・交互3pairs](perf-013-sequence-1000.json)はmovie/GIFと同じ固定document、2×2・100fps・CPU reference・clipなしの画像連番である。before=`1f05c438…`、after=`65129ba16048c26bff6592fc0c406b2f50b53ebfa51cd0aa19eaf18b974e2289`。全semantic metadataと各frameのnumeric/display file名・bytes・hashを逐次比較して一致した。movieのencoded bytes/packet oracleは画像連番へ適用せず、比較欄はnullにした。timed workerの後で行う全payload検証はwall/RSSの測定範囲外である。
+
+後続worker p50は13,168.9→8,447.0ms、p95は16,350.7→8,746.2ms。静穏hostではなくworkspace検証も並行し、before/afterのSQLite依存差もある。一般的な描画性能やmetadata変更だけの因果へ帰属させない。初回測定器はSequenceMetadataに存在しないmovie用identity fieldを最終比較で参照して失敗したが、6worker自体は完走済みだった。元の試行記録を保持し、全semantic metadataによるidentity比較を修正した`evidence-validated.json`を別fileへ生成した。元資料のhashも記録し、workerを再実行した成功と混同しない。
+
+renderの65frame全復元/両payload試験、実CLIの65frameページ/最終JSON/結果prune試験が成功した。66frame workerでは65frame目のpushで最初の64frame chunkをflushし、その後にcancelまたは実process強制停止して同一snapshotのattempt1から復旧した。cancelはprivate stageを回収し、killの残骸はresumeで所有identity照合後に回収した（`target/perf-013-sequence-interruption-final.log`、1 passed、8.53秒）。rename後/DB commit前の復旧試験は旧3frameと新65frameのmovie/sequence計4caseを通し、新chunk破損を拒否してから復元・reconcileした（`target/perf-013-long-reconciliation.log`、1 passed、4.89秒）。途中の試験fixtureのAPI/flush位置/private stage path誤りによる失敗ログは成功扱いにしない。
+
+muxはprivate stageの既取得probe2件を受け渡し、Rust側の再probeを除いた。native demuxのopen/stream infoと最終container検証は残す。C→Rustの同期callbackは開始前・64packetごと・trailer前に呼び、Rust panicをC ABI境界へ漏らさず、元のcallback errorを返す。直接取消試験はpacket境界で停止し、temp movie/metadataが一切残らないこととprobe再利用2件を検証した。全delivery試験は9 passed（`target/perf-013-delivery.log`、122.49秒）で、DNx MOV/MXF・チャプター・複数出力・音声のみ/HDRの取消を含む。
+
+[実worker mux比較](perf-013-mux.json)はbefore=`3d0a5d95…`、after=`65129ba1…`、64×64・48frames ProRes/PCM24 MOV、CPU、交互3pairsで、全decoded bits/PTS/layout/priming/packet payload/file bytes/snapshot metadataが一致した。afterの全試行はprobe再利用2件・native取消callback5回を記録した。後続wall p50は247.4→273.9ms、p95は268.1→287.5msで、この短いfixtureでは全体速度改善を確認していない。重複検査の削減と取消境界の実装を証明する記録であり、直接muxの採用根拠へ読み替えない。チャプターの非空往復はdelivery試験で別に確認した。
+
+10,000frame画像連番比較と最終workspace testは実行中。workspace/all-target Clippyとfmtは成功した。受け入れはまだ`in_progress`で、PERF-014の試作も残る。
+
+[ページQueryの別プロセス計測](perf-013-query-memory.json)は成功済み1,000/10,000frameジョブの先頭/末尾から各64件を取得した。Darwin `/usr/bin/time -l` のkernel maximum RSSは15,777,792〜15,859,712bytes、応答は約171KBで、frame総数の10倍化に比例しなかった。chunk/header/indexを逐次読む実装上限と併せて評価する。これは測定fixtureの4プロセスであり、全作品のRSS上限を保証せず、workerの100ms sampled peakとも区別する。
