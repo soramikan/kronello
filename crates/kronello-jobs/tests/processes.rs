@@ -5,10 +5,18 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+// A one-second watchdog precondition must not compete with unrelated FULL
+// synchronous stress workloads. Ordinary fixtures still run concurrently; the
+// stress child retains all of its internal writer/open-close concurrency.
+static PROCESS_TEST_LOAD: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
 struct Fixture {
     cleanup: WorkerCleanup,
     temp: tempfile::TempDir,
     store: JobStore,
+    // Release only after cleanup has reaped all children and closed the store.
+    _shared_load: Option<std::sync::RwLockReadGuard<'static, ()>>,
+    _exclusive_load: Option<std::sync::RwLockWriteGuard<'static, ()>>,
 }
 impl Fixture {
     fn new() -> Self {
@@ -18,6 +26,19 @@ impl Fixture {
         Self::with_limits(slots, Duration::from_secs(10))
     }
     fn with_limits(slots: usize, heartbeat_timeout: Duration) -> Self {
+        Self::with_test_load(slots, heartbeat_timeout, false)
+    }
+    fn with_test_load(slots: usize, heartbeat_timeout: Duration, exclusive: bool) -> Self {
+        let shared = (!exclusive).then(|| {
+            PROCESS_TEST_LOAD
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        let isolated = exclusive.then(|| {
+            PROCESS_TEST_LOAD
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("state");
         let cleanup = WorkerCleanup::new(&root).unwrap();
@@ -47,6 +68,8 @@ impl Fixture {
             cleanup,
             temp,
             store,
+            _shared_load: shared,
+            _exclusive_load: isolated,
         }
     }
     fn submit(&self, name: &str, directory: bool) -> JobRecord {
@@ -410,7 +433,7 @@ fn concurrent_connection_lifecycle_and_worker_writes_make_progress() {
 
 #[test]
 fn heartbeat_deadline_exits_worker_and_recovers_interrupted() {
-    let f = Fixture::with_limits(1, Duration::from_secs(1));
+    let f = Fixture::with_test_load(1, Duration::from_secs(1), true);
     let r = f.submit("stalled", false);
     let active = f.wait(&r.id, JobStatus::Running);
     let guard = kronello_platform::ProcessGuard::capture(active.worker_pid.unwrap()).unwrap();
