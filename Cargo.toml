@@ -15,3 +15,8 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = "warn"
+
+# Large pinned fonts/assets must still be hashed in debug builds. In particular,
+# sha2 uses its portable implementation on aarch64 without the asm feature.
+[profile.dev.package.sha2]
+opt-level = 3

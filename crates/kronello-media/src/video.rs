@@ -2,6 +2,31 @@ use crate::*;
 use kronello_render::{DecodedVideoFrame, RenderError, VideoDecodeBackend};
 use kronello_time::Rational;
 use std::path::Path;
+use std::sync::Arc;
+
+#[cfg(test)]
+mod shared_presentation_tests {
+    use super::*;
+    #[test]
+    fn immutable_native_presentation_is_shared_without_pixel_copies() {
+        let runtime = MediaRuntime::load().unwrap();
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/fixtures/generated/media/cfr-24-1.nut");
+        let mut decoder = runtime.open_video(&path).unwrap();
+        let first = decoder.decode_shared(Rational::ZERO, false).unwrap();
+        let bytes = first.pixels.clone();
+        let within = decoder
+            .decode_shared(Rational::new(1, 48).unwrap(), false)
+            .unwrap();
+        assert!(Arc::ptr_eq(&first, &within));
+        assert_eq!(decoder.decode_stats().cache_clone_bytes, 0);
+        assert_eq!(decoder.decode_stats().returned_clone_bytes, 0);
+        let next = decoder.decode_shared(first.end, false).unwrap();
+        assert!(!Arc::ptr_eq(&first, &next));
+        assert_eq!(next.pts, first.end);
+        assert_eq!(first.pixels, bytes);
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct VideoDecodeStats {
@@ -52,7 +77,7 @@ pub struct VideoDecoder {
     pub(crate) native: ffi::NativeDecoder,
     pub(crate) report: MediaPathReport,
     pub(crate) stats: VideoDecodeStats,
-    pub(crate) current: Option<DecodedVideoFrame>,
+    pub(crate) current: Option<Arc<DecodedVideoFrame>>,
     pub(crate) lookahead: Option<ffi::RawFrame>,
     pub(crate) seek_index: crate::video_seek::VideoSeekIndex,
     pub(crate) canonical: bool,
@@ -381,18 +406,38 @@ impl VideoDecoder {
     /// presentations may restart near their PTS, with full native-frame digest
     /// verification and explicit origin fallback. No CFR/VFR approximation.
     pub fn decode_at(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
-        self.decode_requested(time, false)
+        self.decode_owned(time, false)
     }
     /// Reverse endpoint selection uses the exact presentation interval (pts, end].
     /// No nominal frame rate or epsilon is used, including variable-rate media.
     pub fn decode_at_reverse(&mut self, time: Rational) -> Result<DecodedVideoFrame, MediaError> {
-        self.decode_requested(time, true)
+        self.decode_owned(time, true)
+    }
+    fn decode_owned(
+        &mut self,
+        time: Rational,
+        reverse: bool,
+    ) -> Result<DecodedVideoFrame, MediaError> {
+        let frame = self.decode_requested(time, reverse)?;
+        let bytes = frame.pixels.len() as u64;
+        self.stats.returned_clone_bytes += bytes;
+        self.record_copy(bytes)?;
+        Ok(frame.as_ref().clone())
+    }
+    /// Immutable presentation ownership for internal render/flow consumers.
+    /// Cursor state and canonical seek verification remain per decoder.
+    pub(crate) fn decode_shared(
+        &mut self,
+        time: Rational,
+        reverse: bool,
+    ) -> Result<Arc<DecodedVideoFrame>, MediaError> {
+        self.decode_requested(time, reverse)
     }
     fn decode_requested(
         &mut self,
         time: Rational,
         reverse: bool,
-    ) -> Result<DecodedVideoFrame, MediaError> {
+    ) -> Result<Arc<DecodedVideoFrame>, MediaError> {
         let result = self.decode_verified(time, reverse);
         if result.is_err() {
             self.current = None;
@@ -449,7 +494,7 @@ impl VideoDecoder {
         &mut self,
         time: Rational,
         reverse: bool,
-    ) -> Result<DecodedVideoFrame, MediaError> {
+    ) -> Result<Arc<DecodedVideoFrame>, MediaError> {
         self.check_source()?;
         let interval_hit = self.current.as_ref().is_some_and(|frame| {
             if reverse {
@@ -506,7 +551,7 @@ impl VideoDecoder {
         anchor: Rational,
         time: Rational,
         reverse: bool,
-    ) -> Result<DecodedVideoFrame, MediaError> {
+    ) -> Result<Arc<DecodedVideoFrame>, MediaError> {
         self.current = None;
         self.lookahead = None;
         self.canonical = false;
@@ -521,7 +566,7 @@ impl VideoDecoder {
         time: Rational,
         reverse: bool,
         canonical_scan: bool,
-    ) -> Result<DecodedVideoFrame, MediaError> {
+    ) -> Result<Arc<DecodedVideoFrame>, MediaError> {
         if let Some(frame) = &self.current {
             if if reverse {
                 time > frame.pts && time <= frame.end
@@ -529,10 +574,8 @@ impl VideoDecoder {
                 time >= frame.pts && time < frame.end
             } {
                 let cloned = frame.clone();
-                let bytes = cloned.pixels.len() as u64;
                 self.stats.interval_hits += 1;
-                self.stats.returned_clone_bytes += bytes;
-                self.record_copy(bytes)?;
+                kronello_render::count_execution("native_frame_shared_hits", 1);
                 return Ok(cloned);
             }
             if canonical_scan
@@ -594,8 +637,7 @@ impl VideoDecoder {
                     + next.as_ref().map_or(0, |n| n.pixels.len() as u64);
                 self.stats.peak_cached_frame_bytes = self.stats.peak_cached_frame_bytes.max(bytes);
                 self.lookahead = next;
-                self.stats.cache_clone_bytes += decoded.pixels.len() as u64;
-                self.record_copy(decoded.pixels.len() as u64)?;
+                let decoded = Arc::new(decoded);
                 self.current = Some(decoded.clone());
                 return Ok(decoded);
             }

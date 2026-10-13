@@ -1,9 +1,25 @@
 # 05 レンダラーと GPU
 
+## PERF-012: linear待機統合とstaging pool
+
+[ADR-0164](../adr/0164-unified-linear-readback-and-bounded-staging.md)に従い、Movie/GIF/shutter sampleのlinear画像とsticky statusを同時copy/mapし、一回の完了待ちとstatus正常確認後に画素とcacheを公開する。deviceのmanaged stagingは貸出/idle合計4件/16MiB、完了・view解放・unmap・buffer consumer終了後だけ再利用する。大きい/競合時は従来の一回限りのbufferで、queue/in-flight数を増やさない。通常frame/displayとresident境界、disk保存の追加転送、f64 temporal積算は維持する。[PERF-012](../testing/perf-012.md)はbytes/回数/wait/allocation/RSSと適用条件を区別して追跡する。
+
+## PERF-010: 直接色変換と動画出力共有
+
+[ADR-0162](../adr/0162-direct-color-and-shared-video-delivery.md)に従い、SDR/HDR/tone-mapの演算順と丸め境界を保ってtileからpacked bundleのstride/offsetへ直接書く。同じ背景bit列・transfer・tone-map・packed formatのlegはowner bufferを共有し、Movieのnative constructor設定と共通raster/PTS/bitrate/runtimeまで一致する場合はvideo stageも共有する。二組のframe ownership・独立native runtime threadを維持し、container/音声/chapters/export hashと最終検証・publicationは各legに残す。GIFは色変換だけ共有し二段階を維持する。追加workerや変換threads2/4の採否と受け入れは[PERF-010](../testing/perf-010.md)で追跡する。
+
+## PERF-008: 不変presentationと変換source共有
+
+[ADR-0160](../adr/0160-shared-presentations-and-converted-source-cache.md)に従い、MediaSessionのSceneKey別cursorは維持し、検証後の実presentationをRGBA変換前に共有する。source cacheは8件/256MiBのpixel・sampler/LUT・key payload、native presentationは既存のcursor個数/512MiB予算。不変sourceはArcで共有する。SDRのfull-source f32展開を行わず、HDR/flowは既存のlinear imageを共有する。各アクセス前後の資産検証とcolor/stream lockを維持し、flowの要求時刻・reverse・HDR/working spaceを区別する。native converterは各formatの1slotを設定一致中保持する。受け入れは[PERF-008](../testing/perf-008.md)で追跡する。
+
+## PERF-007: 書き出し準備とsample SceneIR共有
+
+[ADR-0159](../adr/0159-prepared-export-and-bounded-sample-scenes.md)に従い、同期exportと固定workerが使うmedia export入口で、検証済みsnapshot・static lowering・canonical/evaluation hash・不変font/LUT入力とmetadata共通情報を保持する。通常raw入力の検証は維持する。一意な有理数sample時刻のSceneIRを最大16件/64MiBのlogical payloadで共有し、DAGはtile ROI/haloごとに構築する。大きいsample数や巨大sceneは再評価を許し、先行保持を無制限に増やさない。f64積算順とlinear-only境界は維持する。受け入れは[PERF-007](../testing/perf-007.md)で追跡する。
+
 ## PERF-004: 二組のframeによるdelivery pipeline
 
 [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md)に従い、Movie/GIFのtile render・色変換はcaller thread、
-native encodeとGIF第二段階は専用threadで行う。per-leg RGBA8/RGBA64を二組だけ循環させ、
+native encodeとGIF第二段階は専用threadで行う。ADR-0162の同条件owner別RGBA8/RGBA64を二組だけ循環させ、
 queue・consumer・recycle・finishを含めて追加pending frameを持たない。固定frame gridからPTS/spanを先に決める。
 専用threadは同一directoryの独立Runtimeを開きcapability一致を確認し、native handle/error bufferやRcをthread間で渡さない。
 GIF第二段階はpooled bufferを再利用し、callerのcheckpoint gateを待つ。全失敗でdisconnect/join後にstageを回収する。
@@ -373,7 +389,7 @@ synthetic root 省略分も安全側の差になる。
 永続 cache・pool・geometry・font・driver の予算/実測はこの中間面 payload 推定と区別する。
 512 MiB超過は `UNSUPPORTED_FEATURE`。backend 固有の安全予算も適用する。
 一般 frame / image sequence の最終2面と render.explain の host 面推定は従来のまま。
-Movie/GIFは [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md) の二組のper-leg RGBA8/RGBA64を循環させ、
+Movie/GIFは [ADR-0152](../adr/0152-two-frame-delivery-pipeline.md)・[ADR-0162](../adr/0162-direct-color-and-shared-video-delivery.md) の二組のowner別RGBA8/RGBA64を循環させ、
 callerのtile render・変換と独立Runtimeのnative encodeを重ねる。追加pending frameや全画面float32面は保持しない。
 音声の spool / bounded Bus、I/O report、実測 RSS と検証範囲は
 [RENDER-003](../testing/render-003.md) を参照する。
@@ -444,3 +460,11 @@ Unixのnative sessionは共有serviceのsnapshot・font bytes・parsed LUTをrev
 ### PERF-005 の有界hardware cursor
 
 strict resident backendはlocal fileの圧縮decode-order metadataを一度走査し、実測PTSのglobal reorder gapによるwatermarkとVT waitを使って正確な提示を証明する。圧縮sampleは一つずつ読み、順方向はhardware sessionと有界future outputを再利用する。backwardは同じoriginから再openする。node/instance・全asset lock・streamごとの最大8cursor、保持output合計512MiB、各cursor/callback64outputsとsingle compressed sample128MiBを超える場合は型付き失敗またはpool退避とする。返却frameとGPU import、native codec/AVFoundation内部は保持payload予算外で、RSS上限を主張しない。source fingerprintと既存前後asset hash/color/dimensions検査を維持する。一発native oracleとProRes RAWは既存全clip上限の経路を維持する。詳細とCPU検証oracleのSDR clamp修正は[ADR-0156](../adr/0156-bounded-persistent-hardware-cursor.md)。最終受け入れとGPU範囲/寿命最適化は[PERF-005](../testing/perf-005.md)で別に確認する。
+
+## 長い画像連番のmetadata
+
+[ADR-0166](../adr/0166-bounded-sequence-metadata.md)に従い、連番の時刻は有理数frame planで逐次生成し、inline64件/1MiB超過時のmetadataとnumeric/display参照は共通headerと64件/4MiB chunkへ保存する。全frame reportを保持せず、最終sequence JSONは小さいdescriptorを返す。両画素形式とframe index/time/hashは維持し、workerのpublication/recoveryは全画素fileを逐次照合する。短いversion1のframe JSONと旧reader互換経路を残す。ページAPIと確定順は[14](14-jobs.md)を参照する。
+
+## PERF-014のdelivery試作
+
+[ADR-0167](../adr/0167-experimental-export-delivery.md)に従い、Metal RGBA16FからBT.709 BGRA8 IOSurfaceへ書くhardware H.264入力と、ProRes/PCM24の直接packet muxは任意featureの比較入口だけに含める。公開export/worker/capabilitiesへは未採用。GPU待機とencoder完了前にsurfaceを再利用せず、private stageとno-clobber publicationを使う。対象fixtureの全体時間・画素/音声・色・時刻・metadata・失敗回収と対応範囲は[PERF-014](../testing/perf-014.md)を参照する。

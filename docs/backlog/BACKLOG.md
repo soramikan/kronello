@@ -3,8 +3,8 @@
 <!-- このファイルは scripts/backlog.py render が生成する。直接編集しない。正本は backlog.json。 -->
 
 - schema_version: 0.5
-- 更新日: 2026-10-11
-- タスク数: 151
+- 更新日: 2026-10-13
+- タスク数: 160
 
 ## 集計
 
@@ -19,7 +19,7 @@
 | M7 | 0 | 0 | 11 | 0 | 11 |
 | M8 | 0 | 0 | 16 | 0 | 16 |
 | M9 | 2 | 0 | 11 | 0 | 13 |
-| M10 | 1 | 0 | 15 | 0 | 16 |
+| M10 | 1 | 0 | 24 | 0 | 25 |
 | M11 | 14 | 0 | 0 | 0 | 14 |
 
 ## M0
@@ -1255,6 +1255,87 @@
   - 未知の版・種類・フィールドのlossless保存を維持し編集不可診断に対象集合とIDを列挙する
   - 交差xハンドルと(1,0)/(0,1)を参照評価・単調性・JSON往復で検証しGUI接線制約を一致させる
   - ADR・設計・公開schema/Swiftを更新し必要な静的検証と対象テストの結果を記録する
+
+### PERF-006 実worker全工程計測と固定fixture
+
+- 優先度: P0 / 領域: performance / 状態: done
+- 依存: PERF-005
+- 受け入れ条件:
+  - 固定fixture・snapshot identity・実行binary hash・runtimeを記録し、既存codec測定本文とraw JSONの不整合を訂正して再採取する
+  - render.submitからsucceededまで実workerで準備、音声decode/mix/encode、SceneIR/DAG、素材変換、GPU実行/待機、出力変換、encoder、mux、検証/hash/結果保存の時間・回数を追える
+  - 4K実動画の0/3/8 samples、数千clipと日本語字幕/blur、同素材異時刻/速度、動画/FLAC複数出力、長尺音声部分出力、長尺metadata/復旧の固定ケースを用意する
+  - 短尺A/Bを交互に実行しcold/warm p50/p95、buffer返却待ち、DB commit数、変換回数、全stage bytes、保持payload、RSSを区別して記録する。長尺完走と定常メモリ観測、Metal基準と他backendを分離する
+
+### PERF-007 書き出し準備済みコンテキストとsample SceneIR共有
+
+- 優先度: P0 / 領域: performance / 状態: done
+- 依存: PERF-006
+- 受け入れ条件:
+  - 同期exportと固定workerが検証済み不変snapshot、静的sequence lowering、canonical/evaluation hash、font/LUT identity、有界意味cache、metadata共通情報を同じコンテキストで保持する
+  - 構造検証・静的準備・不変hash計算がframe数に比例せず、3/8 samplesのSceneIR評価がtile数に比例しない
+  - 有理数sample時刻/weight/cut policy/ROI/haloとtile単位f64加算順を維持し画素bit一致を検証する。巨大sample数でもSceneIR保持量を有界にする
+
+### PERF-008 素材frame共有と変換cache・SwsContext保持
+
+- 優先度: P0 / 領域: performance / 状態: done
+- 依存: PERF-006
+- 受け入れ条件:
+  - 素材変換前に容量制限付きcacheを判定し同じ素材/sampleのnative/packed RGBAを読み取り専用所有でtile間共有する。SwsContextを入力/出力形式・size・matrix/range/filterの一致中保持する
+  - 独立decoder cursorとfingerprint/期待hash再検証を維持しoptical flow/reverse/HDR時刻と色設定を同一性に含める。件数/byte上限を検証する
+  - 4K素材1本・4K全面・temporal/haloなしの全素材変換を40回から1回へ減らし全画素/提示PTS/endを一致させる。保持payloadとRSSを別計測する
+
+### PERF-009 worker進捗保存と取消・heartbeatの分離
+
+- 優先度: P0 / 領域: performance / 状態: done
+- 依存: PERF-006
+- 受け入れ条件:
+  - 取消/lease確認と表示進捗永続化を分離し100〜250msの保存間隔と同値抑制を比較する。専用heartbeatと最終確定前fenceを維持する
+  - 実DB commit数が音声block/frame数ではなく経過時間に応じた回数へ減り最終進捗を正確に保存する
+  - 取消確認間隔とnativeを含む停止時間を別測定しlease喪失・DB競合・クラッシュ後復旧を確認する
+
+### PERF-010 色変換直接書込みと複数出力共有
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-007, PERF-008, PERF-009
+- 受け入れ条件:
+  - 変換を既存frame bufferへstride/offset付きで直接書き、一時Vec・行copy・HDR→SDR中間配列を除く。transfer/alpha/範囲検査/丸め順とf32丸め境界を維持し変換bytes一致を検証する
+  - 背景/transfer/tone map/packed formatが同じlegの変換を共有し、codec設定/解像度/時刻/bitrate/runtimeまで同一の動画encode共有を評価する。container音声/chapters/export hashはlegごとに維持する
+  - encoder待ちが支配的ならleg別有界workerを評価し総保持量を管理する。native RGBA→YUVをcodec時間から分離し変換threads 1/2/4とcodecの合計CPU予算を比較する。SVT lp=1を維持する
+
+### PERF-011 書き出し音声mix共有と長尺source準備
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-010
+- 受け入れ条件:
+  - 音声plan/意味版/source lock/範囲/layout/gain/effects/clippingを同一性に含め同一音声のmix/量子化を一回に共有する。codec block差を小さいbufferで吸収しDSP/WSOLA加算順と状態遷移を維持する
+  - 全sample/layout/clipping数/最終partial block/codec priming-padding/PTS一致を確認しmix回数が出力数に比例しない
+  - 長尺素材の短区間出力について検証済みspool再利用を評価する。範囲decodeはresampler履歴/DSP-WSOLA preroll/全authored range検査を整理し、音声映像並列はmix共有後のCPU/I/O競合実測で判断する
+
+### PERF-012 GPU statusと画像待機統合・staging再利用
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-010
+- 受け入れ条件:
+  - status/画像copyと両map開始を同じ完了単位へまとめ4Kのwaitを80→40、3 samplesで240→120に減らす。readback回数/bytesとは区別する
+  - 有界staging poolを評価しGPU完了/map解除/consumer終了まで再利用しない。異常status確認前に結果/cacheを公開しない。数値異常検出と全画素比較を維持する
+  - Metal基準でGPU/CPU色変換の重なりとallocation/待ち/RSSを測りGPU量子化・temporal積算は別タスクへ分離する
+
+### PERF-013 有界metadata・receiptとmux確定工程
+
+- 優先度: P1 / 領域: performance / 状態: done
+- 依存: PERF-011, PERF-012
+- 受け入れ条件:
+  - 版付き共通headerと固定上限frame metadata chunk、小さいroot receiptのhash/frame range/count/identityをwriter/reader/結果API/復旧へ実装する。statusはsummary、詳細はページ単位で読む
+  - 長尺metadata生成/読み戻しメモリが全frame数に比例せず元metadataを復元できる。chunk欠落/破損/順序違いを拒否し旧receipt読み込み/復旧を維持する
+  - 同じprivate stageの既取得probeを渡し重複open/検査を減らす。mux中の時間/packet基準cancel確認を追加しPTS/DTS/duration/priming/chapters/snapshot metadata/最終検証/失敗stage回収を維持する。GIF二段階は区別する
+
+### PERF-014 GPU色変換・encoder surface・直接mux試作
+
+- 優先度: P2 / 領域: performance / 状態: done
+- 依存: PERF-013
+- 受け入れ条件:
+  - 先行改善後の工程実測に基づき対象backend/formatを絞ってGPU出力→encoder入力surfaceとpacket直接muxを試作・比較する
+  - 対象形式の全体時間改善と色差sampling/range/丸め/時刻/surface寿命/失敗回収を検証する。採用可否と対応範囲を明記し未保証backendへ広げない
 
 
 ## M11

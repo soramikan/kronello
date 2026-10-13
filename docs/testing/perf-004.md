@@ -67,6 +67,8 @@ packet durationの最後のsubmitからの流用を、最大256件のPTS/span me
 
 ## 製品delivery経路のcodec比較
 
+2026-10-12の監査で、before/afterのsnapshot hashが異なり、記録されたbinary hashが同一であることを確認した。以下は過去のraw測定の記述であり、固定入力・異なる実行binaryを保証するA/Bの証拠としては採用しない。encoded bytes一致の誤記を訂正し、元JSONは保存する。PERF-006で固定fixtureと実行binary hashによる再採取を進める。
+
 [測定JSON](perf-004-codec-delivery.json)。同じRust `perf_codec_delivery` とPTS/span修正を両側に固定し、workspaceのコピー側だけProRes/DNxを1threadへ戻してrelease binaryを作った。製品sourceを一時的に書き換えていない。synthetic linear tile patternを注入する製品delivery APIで、12frame・24fps・1/2秒・silent stereoをencodeした。timed scopeはpattern生成/音声encode/映像encode/mux/検査/publication。Scene描画・GPU・素材decode・Runtime load・hash/oracleは含まない。
 
 | Codec / pixels | before warm p50/p95 ms | after warm p50/p95 ms |
@@ -78,7 +80,7 @@ packet durationの最後のsubmitからの流用を、最大256件のPTS/span me
 | DNxHR HQX 1920×1080 | 833.101 / 907.719 | 813.148 / 913.344 |
 | SVT-AV1 1920×1080（設定維持） | 930.037 / 939.291 | 926.222 / 928.230 |
 
-各cold1 + warm8、全before→全after、静穏hostではない。設定不変のSVTにも時間差があり、これだけでcodec並列化の因果的倍率を保証しない。native encodeだけの予備測定より製品全体の差は小さく、tile変換等を含む時間を区別する。全54組でencoded file bytes、独立ffmpeg decodeのnative画素bit、全12frameの有理数PTS/span、sample range、progress/checkpoint、backend call数が一致した。初回はProRes legacy envelopeへ新movie constructorを使ってtyped拒否されたため、正規のlegacy constructorへ修正し、成功したv2のみ採用した。
+各cold1 + warm8、全before→全after、静穏hostではない。設定不変のSVTにも時間差があり、これだけでcodec並列化の因果的倍率を保証しない。native encodeだけの予備測定より製品全体の差は小さく、tile変換等を含む時間を区別する。全54組で独立ffmpeg decodeのnative画素bitと全12frameの有理数PTS/spanが一致した。encoded file bytesはraw JSONの全6ケースで不一致であり、旧本文の「一致」は誤記だった（2026-10-12訂正）。sample range、progress/checkpoint、backend call数の比較はraw記録を参照する。初回はProRes legacy envelopeへ新movie constructorを使ってtyped拒否されたため、正規のlegacy constructorへ修正し、成功したv2のみ採用した。
 
 全codec連続probeのmaximum RSSは371.16→371.51 MB、peak footprintは278.27→280.94 MB（decimal）。個別1080p probeはProRes RSS71.06→80.69 MB、DNx134.22→142.82 MB。thread内部bufferが増えるため、shimの画像一枚/packet所有からRSS低下を主張しない。個別probeも各9encodeのプロセス全体であり、encoderだけのallocation測定ではない。
 

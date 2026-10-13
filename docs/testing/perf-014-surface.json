@@ -1,0 +1,2564 @@
+{
+  "trials": [
+    {
+      "pair": 0,
+      "mode": "cpu",
+      "total_ms": 1162.8335000000002,
+      "prepare_ms": 225.594375,
+      "conversion_ms": 418.49837499999995,
+      "encode_ms": 501.8032083333333,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "6e1ab29764ae478a421993c7352a1888780266d45255ce7da83cdf024a0d47a6",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:a6b58af173e6a02f271fa5dd7f385c6c095d7f099ca2c0ed64b1ec51d7b4b0a8"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 0,
+      "mode": "gpu",
+      "total_ms": 622.215959,
+      "prepare_ms": 4.832666666666667,
+      "conversion_ms": 81.60125,
+      "encode_ms": 519.8783333333332,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "5741dc4228f4158ea58440c93d2713699fc00b8ad41ec925778aa740176e8c64",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:a78e29a48674d49287a149d7d943e70517a161fd4c52cab47102947645844223"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 1,
+      "mode": "gpu",
+      "total_ms": 652.976625,
+      "prepare_ms": 10.135125,
+      "conversion_ms": 93.60654166666664,
+      "encode_ms": 530.4555833333333,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "306f7c769647731892e2e6c656dff6ece717f46e6ddd301975a66f36a9f547b9",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:db993584b9a01e54841900488bfa510c7b702c150308c4ecd9847ccc7cc6874f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 1,
+      "mode": "cpu",
+      "total_ms": 982.320875,
+      "prepare_ms": 17.19666666666667,
+      "conversion_ms": 453.8790416666667,
+      "encode_ms": 501.0815416666666,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "0474e9759055b6dfecbf0dd1c9b242d3fd616a72ee8f540ea2298f3df1cc522e",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:f34c98a4dd035f7022dffc6b457a7f389f19262683736beb45e4d5fc11935f12"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 2,
+      "mode": "cpu",
+      "total_ms": 955.579542,
+      "prepare_ms": 6.888458333333333,
+      "conversion_ms": 436.8437083333332,
+      "encode_ms": 502.40583333333325,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "eb7776cc0b8812a923c3ccb782c36e4cfd0caec3bf6438282878e1f31ded3347",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:190e897a1df0e431a9b81330453f1625ad72cf0279790213ed913146334123f6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 2,
+      "mode": "gpu",
+      "total_ms": 623.231167,
+      "prepare_ms": 5.325333333333333,
+      "conversion_ms": 80.89662500000001,
+      "encode_ms": 523.95975,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "edaf4dd2b11b4528c4409dc5a9035e70a198a1d1b8c654ad3e6569e797951ae4",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9dc9edd33d44cdf22540f156df1bb3a83e110ed57fe788316efc4e058b7fc7a6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 3,
+      "mode": "gpu",
+      "total_ms": 658.3044580000001,
+      "prepare_ms": 19.15008333333333,
+      "conversion_ms": 84.78662499999999,
+      "encode_ms": 540.8306666666666,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "eaab0bbc7a485123210f04c3b4c9f045154ea000e3e0a6588e484dd0bae7e8d3",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:53a7ccbf67fd6a9cec0b8aee74e7ec1c7cca19b3ba788ae5f4845e22d7f2aa6c"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 3,
+      "mode": "cpu",
+      "total_ms": 979.263459,
+      "prepare_ms": 12.70225,
+      "conversion_ms": 454.96987499999994,
+      "encode_ms": 501.44358333333344,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "493e0e3f53a8840ff02a4b6e0c83462db5f9caa59888c03b270c4570dce82d7a",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2881b909caeb1e054cc8fb65a67ec66c16bc9572ecc28bdc9c0e900727acb67"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 4,
+      "mode": "cpu",
+      "total_ms": 963.607917,
+      "prepare_ms": 8.479583333333334,
+      "conversion_ms": 445.09733333333327,
+      "encode_ms": 501.4212083333333,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "26b39468e839ccedac720f355849c8b194c9f6f236b403ac20e7e72f898cf3fd",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:dc8b1e87cc581a6630a8099b4e6ec01b75014f73acd0149da483accad0d010b9"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 4,
+      "mode": "gpu",
+      "total_ms": 636.343875,
+      "prepare_ms": 9.381208333333333,
+      "conversion_ms": 91.06429166666666,
+      "encode_ms": 521.5412083333333,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "19475a18da45254fc16d9fb94e3f046a5ba23e9992509b08b511654fc5b4ade4",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:2313cd1c98972dc0030e7052d3de3c6004743a7f5a85a3fd415367e076e696a7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 5,
+      "mode": "gpu",
+      "total_ms": 656.892709,
+      "prepare_ms": 12.577166666666667,
+      "conversion_ms": 93.28716666666668,
+      "encode_ms": 537.2750416666668,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "17dd47bbe20d3bfa338d0e68d07e92fe023367bb4536d921c249d918ab8008f4",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1dbea67d288ef787100b310d0f14343cf0439cd8cae3fca79bf464bf618be098"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 5,
+      "mode": "cpu",
+      "total_ms": 983.014917,
+      "prepare_ms": 11.604166666666666,
+      "conversion_ms": 463.4157916666666,
+      "encode_ms": 498.96491666666674,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "d066f069b55b218ca682b1248337a95761841a41e25108c9403996bd23bda3a5",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1dbeefc7dccb1590471e0483551287ffc9291e86934e3b21912d0fb7a8a325ee"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 6,
+      "mode": "cpu",
+      "total_ms": 962.3558330000001,
+      "prepare_ms": 6.763541666666667,
+      "conversion_ms": 444.1729166666667,
+      "encode_ms": 500.73620833333337,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "08615aadf712f7d69752ce30132c6d78dea8ff5887e01110e67f74445e211a27",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6ebf11341e7ea1ed98a49145c5e53f7d4c6eb125d6a0dab7bfd211cb3c94f0ea"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 6,
+      "mode": "gpu",
+      "total_ms": 622.9590000000001,
+      "prepare_ms": 5.293416666666667,
+      "conversion_ms": 86.22149999999999,
+      "encode_ms": 517.5777083333335,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "76d7974373858309e8493c86af9a0a4a98973e5b147b1b920191461e0d325255",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7586b759037b5fdecd62a9204fffc9b7d9daab234957a605d374f30886ac62f9"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 7,
+      "mode": "gpu",
+      "total_ms": 658.102709,
+      "prepare_ms": 18.36041666666667,
+      "conversion_ms": 88.55100000000002,
+      "encode_ms": 532.3948333333334,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "780737f4c5490ec634456d5be6c78f84393fbb2fad8fa101811e33a6f9c564a0",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:a23b6aa0489745496dddaea04d921bae791e71ab9437a5d64902832361e5a935"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 7,
+      "mode": "cpu",
+      "total_ms": 980.613042,
+      "prepare_ms": 11.995125,
+      "conversion_ms": 457.90599999999995,
+      "encode_ms": 501.7675416666666,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "321bc0ad571434d6d860ff536c8513be3cb65f5b83286398909658b34043c4ca",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:2d55aaab474e66eb78b7b88db341d16bf683b3e9d8c92878d4f8d46b4bb68040"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 8,
+      "mode": "cpu",
+      "total_ms": 961.953834,
+      "prepare_ms": 7.228125,
+      "conversion_ms": 443.7576666666667,
+      "encode_ms": 500.16608333333323,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "83856edd514df0323530c7d4de07115419e544e8b55afadd5fdfbd34f29903e1",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:556c8c1fc3b2289c0b6408095bb7deee2af804a3a1c5add539bef2e9b9f5f3b4"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 8,
+      "mode": "gpu",
+      "total_ms": 623.493458,
+      "prepare_ms": 9.698833333333335,
+      "conversion_ms": 83.25158333333331,
+      "encode_ms": 515.8887083333333,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "ab06c86fb7638391c792342de5822cb0a57698ee683bd3ca3a44dd6704cb750b",
+        "encoded_bytes": 4428268,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:a580862eb46c3df892d92ede44189d6f9e4584cf3dd733189f80a05b31182e63"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:735bb9b4de4f654aa8a4984a9c84e62cd23680532fb1ae4cf20c62cff03affec"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:928e4fbe4495bd26deab6831c2deeaec5018c39a2cf5497a2c61dbe258360656"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:4119210b1b00b6eae829fd692801afe52715e6f5ab850558d48e9ee4b868a74a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0809555fbc286a3fe08885f6f791b7981a5052b9161a628d62cb9e54b9591142"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:3173c9abb9b39d17270a6aeb3f070d1d771b66ce953ffc89b954a7de1dbba83e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:1850af2bff0eda143f315a788fd9d1130599bc7bf63e2d4dcad238efdc23ed7f"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:bcf11aee1a245cd23736f3774eb9f6c131eb048e66fde2dff093adcb3c0afcf3"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:0a25c59cfcb64c30d2fb3c23d9569f08899427ee553b9610844bfbd4cae1abbe"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:983ac0aefe21b4e8cec0b3a79febf648fd59d5a233b3c4665017b1e87b12626a"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9eadf2870b79377d81c25d2d6a0a20bd1d5595bfe2273001ecb17f500504545b"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c3631c10d86bd0c23dec77585ddeaa3e492755c96df9e48b63eab2dab10be268"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:5ee7221c9ee99ab9e97c66674aac177057d8e9fb9e3d1693e78f9c1d50745085"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:39becc847a221c830a32242f0ee0cdfc7f97ef627e68834bdc4a290cc85f6def"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:04446175c55d94dc2621f46df463dd5f91763c6db75fd064a5da425f4558fb58"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6b0d2058b64aaf9937b4ac25e3f55d582cf76a3cf31675c7a9e43e6d4d040f9d"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8af4059a71faba7b584bc9b5acba2d4c680a5ed69dbb2134a03a7988cd75f776"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:c2948168d782c3aa05acf26883f7cedb21c1aed534df7d54ae564765a7a8b2d6"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:6016a045e3496cd0e54b43dbb374a94a7d298f9cae9cc6173b96f8aac65694e0"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:7f6a4cda41c528ef5181592d5329829735c1c6188169e19bf0e83c00e784acfd"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:af5a24f3e2871e24b0e1e9823a9728ecc008aff3bc38030c0a5ecc966b28f99e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:e0a96b2d0504c0988f6163943d62b2eff5ea0653e0b3631755560518e3c6ab6e"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:8da575997fed301022c0b772c706f7cbba2d9e1bc9be976e6367a21eae13fbb7"
+              },
+              {
+                "duration": "1/25",
+                "data_hash": "SHA256:9998af9a878d2b3e34438d04cf51f9016203c2580fb1f393487a48f606e34c7a"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "pair": 0,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005000c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000050a0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 1,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000051e0c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005140c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 2,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005280c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005320c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 3,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005460c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000053c0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 4,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005500c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000055a0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 5,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000056e0c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005640c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 6,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005780c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005820c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 7,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005960c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000058c0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 8,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 2,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005a00c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000005aa0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    }
+  ],
+  "summary": {
+    "cpu": {
+      "first_ms": 1162.8335000000002,
+      "warm_p50_ms": 963.607917,
+      "warm_p95_ms": 983.014917,
+      "warm_conversion_p50_ms": 445.09733333333327
+    },
+    "gpu": {
+      "first_ms": 622.215959,
+      "warm_p50_ms": 636.343875,
+      "warm_p95_ms": 658.3044580000001,
+      "warm_conversion_p50_ms": 86.22149999999999
+    }
+  },
+  "provenance": {
+    "binary_sha256": "502144bfbb2ab1d8fbc44ad53c42089c8d07fb375a24e5ff1718b86c9c9dcbfa",
+    "source_evidence_sha256": "57f4b163b1adf22b6a9bb51ad3ec90848e6595d4631bd6fa222cf14e511d687b",
+    "scope": "Same binary, generated Metal RGBA16F fixture, SDR premultiplied black matte, H.264 hardware encoder, 24 fps. Fresh native objects per trial. Compile/test excluded. Independent decode excluded. Annex B has no authored container timestamps; native callback checks every exact 1/24 PTS and duration. Not the product renderer or worker.",
+    "host": {
+      "os": "macOS 27.0.1 (26A434)",
+      "architecture": "arm64",
+      "backend": "Metal system default device / required hardware VideoToolbox encoder"
+    }
+  },
+  "fixture": {
+    "dimensions": [
+      3840,
+      2160
+    ],
+    "frames": 24,
+    "rate": [
+      24,
+      1
+    ],
+    "input": "Metal RGBA16F; alpha=0.5 or 1 by alternating 32px blocks; rgb=half(((x+3*i)%256,(y+5*i)%256,(x+y+i)%256)/256)*alpha",
+    "output": "black-matte BT.709 BGRA8 -> hardware H.264 YUV420 video range; same f32 LUT for both paths"
+  },
+  "fixture_sha256": "3d780c44195b284fd13c03c9f41df8d5c6f26dad38687201daf3d317f8cb5160"
+}

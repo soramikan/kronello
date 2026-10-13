@@ -5,6 +5,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
+#include <libavutil/time.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/hwcontext.h>
 #include <libswscale/swscale.h>
@@ -21,7 +22,15 @@
 
 #define STR_(x) #x
 #define STR(x) STR_(x)
+typedef struct VideoConverter {
+    struct SwsContext *context;
+    int width,height,format,dst_format,full_range,matrix,filter;
+} VideoConverter;
 typedef struct Km {
+    /* Runtime is thread-confined by Rust Rc. Each output format has one
+     * converter slot; all pixel-affecting configuration is keyed explicitly. */
+    VideoConverter video_converters[2];
+    uint64_t video_converter_creations;
     void *libs[5];
     char error[512];
     int error_code;
@@ -31,6 +40,7 @@ typedef struct Km {
     __typeof__(&avutil_license) avutil_license;
     __typeof__(&avutil_configuration) avutil_configuration;
     __typeof__(&av_version_info) av_version_info;
+    __typeof__(&av_gettime_relative) av_gettime_relative;
     __typeof__(&av_frame_alloc) av_frame_alloc;
     __typeof__(&av_frame_free) av_frame_free;
     __typeof__(&av_frame_unref) av_frame_unref;
@@ -133,6 +143,8 @@ static int fail(Km *k, int code, const char *where) {
 }
 void km_close(Km *k) {
     if (!k) return;
+    for(int i=0;i<2;++i)if(k->video_converters[i].context && k->sws_freeContext)
+        k->sws_freeContext(k->video_converters[i].context);
     for (int i=4; i>=0; --i) if (k->libs[i]) {
 #ifdef _WIN32
         FreeLibrary((HMODULE)k->libs[i]);
@@ -188,6 +200,7 @@ Km *km_open(const char *directory, char *error, size_t capacity) {
     LOAD(0, avutil_license);
     LOAD(0, avutil_configuration);
     LOAD(0, av_version_info);
+    LOAD(0, av_gettime_relative);
     LOAD(0, av_frame_alloc);
     LOAD(0, av_frame_free);
     LOAD(0, av_frame_unref);
@@ -422,7 +435,15 @@ int km_frame_copy(Decoder *d, uint8_t *buffer, int size) {
  * Row-partitioned scaling is deterministic; 0 selects the host CPU count and
  * libswscale builds without the option keep their single thread. */
 static struct SwsContext *video_converter(Km *k, int width, int height,
-        enum AVPixelFormat fmt, enum AVPixelFormat dst_fmt, const char *label) {
+        enum AVPixelFormat fmt, enum AVPixelFormat dst_fmt, int full_range,
+        int matrix, const char *label) {
+    VideoConverter *slot=&k->video_converters[dst_fmt==AV_PIX_FMT_RGBA64LE?1:0];
+    if(slot->context && slot->width==width && slot->height==height &&
+       slot->format==fmt && slot->dst_format==dst_fmt &&
+       slot->full_range==full_range && slot->matrix==matrix && slot->filter==SWS_BILINEAR)
+        return slot->context;
+    if(slot->context)k->sws_freeContext(slot->context);
+    slot->context=NULL;
     struct SwsContext *sws=k->sws_alloc_context();
     if(!sws){fail(k,AVERROR(ENOMEM),label);return NULL;}
     k->av_opt_set_int(sws,"srcw",width,0);
@@ -434,8 +455,15 @@ static struct SwsContext *video_converter(Km *k, int width, int height,
     k->av_opt_set_int(sws,"sws_flags",SWS_BILINEAR,0);
     k->av_opt_set_int(sws,"threads",0,0);
     if(k->sws_init_context(sws,NULL,NULL)<0){k->sws_freeContext(sws);fail(k,AVERROR(EINVAL),label);return NULL;}
+    const int *coeff=k->sws_getCoefficients(matrix);
+    if(k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16)<0){
+        k->sws_freeContext(sws);fail(k,AVERROR(EINVAL),label);return NULL;
+    }
+    *slot=(VideoConverter){sws,width,height,fmt,dst_fmt,full_range,matrix,SWS_BILINEAR};
+    ++k->video_converter_creations;
     return sws;
 }
+uint64_t km_video_converter_creations(Km *k) { return k->video_converter_creations; }
 
 int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *format,
                   int width, int height, int full_range, uint8_t *output) {
@@ -445,12 +473,9 @@ int km_video_rgba(Km *k, const uint8_t *input, int input_size, const char *forma
     uint8_t *planes[4]={0}; int strides[4]={0};
     int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
     if(ret<0)return fail(k,ret,"video planes");
-    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA,"video RGBA converter");
+    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA,full_range,SWS_CS_ITU709,"video RGBA converter");
     if(!sws)return fail(k,AVERROR(EINVAL),"video RGBA converter");
-    const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
-    ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
-    if(ret>=0) { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*4,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
-    k->sws_freeContext(sws);
+    { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*4,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
     return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"video RGBA conversion");
 }
 
@@ -463,12 +488,9 @@ int km_video_rgba64(Km *k, const uint8_t *input, int input_size, const char *for
     uint8_t *planes[4]={0}; int strides[4]={0};
     int ret=k->av_image_fill_arrays(planes,strides,input,fmt,width,height,1);
     if(ret<0)return fail(k,ret,"HDR video planes");
-    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA64LE,"HDR RGBA64 converter");
+    struct SwsContext *sws=video_converter(k,width,height,fmt,AV_PIX_FMT_RGBA64LE,full_range,bt2020?SWS_CS_BT2020:SWS_CS_ITU709,"HDR RGBA64 converter");
     if(!sws)return fail(k,AVERROR(EINVAL),"HDR RGBA64 converter");
-    const int *coeff=k->sws_getCoefficients(bt2020?SWS_CS_BT2020:SWS_CS_ITU709);
-    ret=k->sws_setColorspaceDetails(sws,coeff,full_range,coeff,1,0,1<<16,1<<16);
-    if(ret>=0) { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*8,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
-    k->sws_freeContext(sws);
+    { uint8_t *dst[4]={output,NULL,NULL,NULL};int dst_stride[4]={width*8,0,0,0};ret=k->sws_scale(sws,(const uint8_t *const *)planes,strides,0,height,dst,dst_stride); }
     return ret==height ? 0 : fail(k,ret<0?ret:AVERROR(EINVAL),"HDR RGBA64 conversion");
 }
 
@@ -478,14 +500,64 @@ typedef struct Encoder {
     /* Bounded metadata for delayed packets, not retained image frames. */
     struct { int64_t pts, duration; } spans[256];
     int span_count;
+    int measure;
+    /* conversion calls/us, send calls/us, receive calls/us, packet mux us,
+     * trailer/close us. These are observations, not encode settings. */
+    uint64_t measurements[8];
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+    AVFormatContext *direct_audio;
+    AVPacket *direct_packet;
+    AVStream *direct_stream;
+    int direct_index, direct_ready;
+#endif
 } Encoder;
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+static int direct_audio_until(Encoder *e,int64_t dts,AVRational base,int finish);
+#endif
+static int64_t encoder_clock(Encoder *e) { return e->measure ? e->k->av_gettime_relative() : 0; }
+static void encoder_elapsed(Encoder *e, int slot, int64_t start) {
+    if(e->measure) {
+        int64_t end=e->k->av_gettime_relative();
+        if(end>=start) e->measurements[slot]+=(uint64_t)(end-start);
+    }
+}
+void km_encoder_measure(Encoder *e, int enabled) { e->measure=enabled!=0; }
+void km_encoder_measurements(Encoder *e, uint64_t out[8]) { memcpy(out,e->measurements,sizeof(e->measurements)); }
 void km_encoder_close(Encoder *e) {
     if(!e)return;
     Km *k=e->k;
     if(e->sws)k->sws_freeContext(e->sws);
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+    k->av_packet_free(&e->direct_packet);
+    k->avformat_close_input(&e->direct_audio);
+#endif
     k->av_frame_free(&e->frame); k->av_packet_free(&e->packet); k->avcodec_free_context(&e->codec);
     if(e->format) { if(e->format->pb)k->avio_closep(&e->format->pb); k->avformat_free_context(e->format); }
     free(e);
+}
+#ifndef KRONELLO_ENCODER_SWS_THREADS
+#define KRONELLO_ENCODER_SWS_THREADS 1
+#endif
+#if KRONELLO_ENCODER_SWS_THREADS != 1 && KRONELLO_ENCODER_SWS_THREADS != 2 && KRONELLO_ENCODER_SWS_THREADS != 4
+#error "Encoder conversion threads must be 1, 2 or 4"
+#endif
+/* Closed compile-time comparison policy; no request/FFmpeg argument injection.
+ * Codec threads remain ProRes=4, DNx=2 and SVT lp=1. */
+static struct SwsContext *encoder_converter(Km *k,int width,int height,int src_format,int dst_format) {
+    struct SwsContext *sws=k->sws_alloc_context();
+    if(!sws){fail(k,AVERROR(ENOMEM),"encoder converter allocation");return NULL;}
+    const struct {const char *name;int value;} options[]={
+        {"srcw",width},{"srch",height},{"src_format",src_format},
+        {"dstw",width},{"dsth",height},{"dst_format",dst_format},
+        {"sws_flags",SWS_BILINEAR},{"threads",KRONELLO_ENCODER_SWS_THREADS}
+    };
+    for(size_t i=0;i<sizeof(options)/sizeof(options[0]);++i){
+        int ret=k->av_opt_set_int(sws,options[i].name,options[i].value,0);
+        if(ret<0){k->sws_freeContext(sws);fail(k,ret,"encoder converter option");return NULL;}
+    }
+    int ret=k->sws_init_context(sws,NULL,NULL);
+    if(ret<0){k->sws_freeContext(sws);fail(k,ret,"encoder converter initialization");return NULL;}
+    return sws;
 }
 Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int width, int height, int num, int den, int hdr) {
     Encoder *e=calloc(1,sizeof(*e)); if(!e) {fail(k,AVERROR(ENOMEM),"encoder allocation");return NULL;} e->k=k;
@@ -531,8 +603,8 @@ Encoder *km_encoder_open_color(Km *k, const char *path, const char *name, int wi
     e->frame->format=e->codec->pix_fmt;e->frame->width=width;e->frame->height=height;
     e->frame->color_primaries=e->codec->color_primaries;e->frame->color_trc=e->codec->color_trc;e->frame->colorspace=e->codec->colorspace;e->frame->color_range=e->codec->color_range;
     ret=k->av_frame_get_buffer(e->frame,32);if(ret<0){fail(k,ret,"frame buffer");goto failed;}
-    e->sws=k->sws_getContext(width,height,hdr?AV_PIX_FMT_RGBA64LE:AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
-    if(!e->sws){fail(k,AVERROR(ENOMEM),"pixel conversion");goto failed;}
+    e->sws=encoder_converter(k,width,height,hdr?AV_PIX_FMT_RGBA64LE:AV_PIX_FMT_RGBA,e->codec->pix_fmt);
+    if(!e->sws)goto failed;
     const int *coeff=k->sws_getCoefficients(hdr?SWS_CS_BT2020:SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(e->sws,coeff,1,coeff,0,0,1<<16,1<<16);
     if(ret<0){fail(k,ret,"BT.709 pixel conversion");goto failed;}
@@ -587,8 +659,8 @@ Encoder *km_encoder_open_dnx(Km *k,const char *path,int width,int height,int num
     e->frame->format=e->codec->pix_fmt;e->frame->width=width;e->frame->height=height;
     e->frame->color_primaries=e->codec->color_primaries;e->frame->color_trc=e->codec->color_trc;e->frame->colorspace=e->codec->colorspace;e->frame->color_range=e->codec->color_range;
     ret=k->av_frame_get_buffer(e->frame,32);if(ret<0){fail(k,ret,"frame buffer");goto failed;}
-    e->sws=k->sws_getContext(width,height,AV_PIX_FMT_RGBA,width,height,e->codec->pix_fmt,SWS_BILINEAR,NULL,NULL,NULL);
-    if(!e->sws){fail(k,AVERROR(ENOMEM),"pixel conversion");goto failed;}
+    e->sws=encoder_converter(k,width,height,AV_PIX_FMT_RGBA,e->codec->pix_fmt);
+    if(!e->sws)goto failed;
     const int *coeff=k->sws_getCoefficients(SWS_CS_ITU709);
     ret=k->sws_setColorspaceDetails(e->sws,coeff,1,coeff,0,0,1<<16,1<<16);
     if(ret<0){fail(k,ret,"BT.709 pixel conversion");goto failed;}
@@ -597,7 +669,10 @@ failed:km_encoder_close(e);return NULL;
 }
 static int write_packets(Encoder *e) {
     for(;;){
+        int64_t receive=encoder_clock(e);
         int ret=e->k->avcodec_receive_packet(e->codec,e->packet);
+        if(e->measure)++e->measurements[4];
+        encoder_elapsed(e,5,receive);
         if(ret==AVERROR(EAGAIN)||ret==AVERROR_EOF)return 0;
         if(ret<0)return fail(e->k,ret,"receive packet");
         /* Packet PTS identifies its own input span before mux rescaling.
@@ -613,7 +688,15 @@ static int write_packets(Encoder *e) {
                 (size_t)(e->span_count-span-1)*sizeof(e->spans[0]));
         --e->span_count;
         e->k->av_packet_rescale_ts(e->packet,e->codec->time_base,e->stream->time_base);e->packet->stream_index=e->stream->index;
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+        if(e->direct_audio) {
+            int audio_ret=direct_audio_until(e,e->packet->dts,e->stream->time_base,0);
+            if(audio_ret<0){e->k->av_packet_unref(e->packet);return audio_ret;}
+        }
+#endif
+        int64_t mux=encoder_clock(e);
         ret=e->k->av_interleaved_write_frame(e->format,e->packet);e->k->av_packet_unref(e->packet);
+        encoder_elapsed(e,6,mux);
         if(ret<0)return fail(e->k,ret,"write packet");
     }
 }
@@ -622,20 +705,35 @@ int km_encoder_frame(Encoder *e,const uint8_t *rgba,int64_t pts,int64_t duration
     if(e->span_count==256)return fail(e->k,AVERROR(ENOSPC),"encoder delayed span budget exceeded");
     int ret=e->k->av_frame_make_writable(e->frame);if(ret<0)return fail(e->k,ret,"writable frame");
     const uint8_t *data[4]={rgba,NULL,NULL,NULL};int stride[4]={e->input_stride,0,0,0};
+    int64_t conversion=encoder_clock(e);
     ret=e->k->sws_scale(e->sws,data,stride,0,e->codec->height,e->frame->data,e->frame->linesize);
+    if(e->measure)++e->measurements[0];
+    encoder_elapsed(e,1,conversion);
     if(ret!=e->codec->height)return fail(e->k,AVERROR_INVALIDDATA,"pixel conversion");
     e->frame->pts=pts; e->frame->duration=duration;
     e->spans[e->span_count].pts=pts;
     e->spans[e->span_count].duration=duration;
     ++e->span_count;
-    ret=e->k->avcodec_send_frame(e->codec,e->frame);if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
+    int64_t send=encoder_clock(e);
+    ret=e->k->avcodec_send_frame(e->codec,e->frame);
+    if(e->measure)++e->measurements[2];
+    encoder_elapsed(e,3,send);
+    if(ret<0)return fail(e->k,ret,"send frame");return write_packets(e);
 }
 int km_encoder_finish(Encoder *e) {
-    int ret=e->k->avcodec_send_frame(e->codec,NULL);if(ret<0)return fail(e->k,ret,"flush encoder");
+    int64_t send=encoder_clock(e);
+    int ret=e->k->avcodec_send_frame(e->codec,NULL);
+    if(e->measure)++e->measurements[2];
+    encoder_elapsed(e,3,send);
+    if(ret<0)return fail(e->k,ret,"flush encoder");
     ret=write_packets(e);if(ret<0)return ret;
     if(e->span_count)return fail(e->k,AVERROR(EINVAL),"encoder flush omitted submitted frames");
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+    if(e->direct_audio){ret=direct_audio_until(e,0,e->stream->time_base,1);if(ret<0)return ret;}
+#endif
+    int64_t trailer=encoder_clock(e);
     ret=e->k->av_write_trailer(e->format);if(ret<0)return fail(e->k,ret,"write trailer");
-    ret=e->k->avio_closep(&e->format->pb);if(ret<0)return fail(e->k,ret,"close output");return 0;
+    ret=e->k->avio_closep(&e->format->pb);encoder_elapsed(e,7,trailer);if(ret<0)return fail(e->k,ret,"close output");return 0;
 }
 const char *km_encoder_format(Encoder *e){return e->k->av_get_pix_fmt_name(e->codec->pix_fmt);}
 
@@ -976,10 +1074,11 @@ uint32_t km_mux_video_tag(int profile) { return (profile==3 || profile==5)?MKTAG
 typedef struct { int64_t start; int64_t end; const char *title; } KmChapter;
 int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     const char *render_hash,const char *export_hash,int profile,int audio_channels,
-    const KmChapter *chapters,int chapter_count) {
+    const KmChapter *chapters,int chapter_count,int (*checkpoint)(void *),void *checkpoint_data) {
     AVFormatContext *input[2]={NULL,NULL},*out=NULL;AVPacket *packets[2]={NULL,NULL};
     AVStream *streams[2]={NULL,NULL};int index[2]={-1,-1},ready[2]={0,0};
-    int ret=0;
+    int ret=0;uint64_t copied_packets=0;
+    if(checkpoint && checkpoint(checkpoint_data)<0)return fail(k,AVERROR_EXIT,"mux canceled");
     /* Closed profile matrix: 0-7 are the pre-MEDIA-004 movie profiles,
      * 8 = DNxHR/PCM24 MOV and 9 = DNxHR/PCM24 MXF delivery remuxes. */
     const enum AVCodecID videos[10]={AV_CODEC_ID_PRORES,AV_CODEC_ID_AV1,AV_CODEC_ID_H264,AV_CODEC_ID_HEVC,
@@ -1066,6 +1165,9 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
     ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0){fail(k,ret,"mux header");goto done;}
     for(int i=0;i<2;++i){ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}}
     while(ready[0] || ready[1]) {
+        if((copied_packets%64)==0 && checkpoint && checkpoint(checkpoint_data)<0) {
+            ret=fail(k,AVERROR_EXIT,"mux canceled");goto done;
+        }
         int i=!ready[0]?1:!ready[1]?0:
             (k->av_compare_ts(packets[0]->dts,input[0]->streams[index[0]]->time_base,
                 packets[1]->dts,input[1]->streams[index[1]]->time_base)<=0?0:1);
@@ -1073,8 +1175,10 @@ int km_mux_av(Km *k,const char *video,const char *audio,const char *path,
         packets[i]->stream_index=streams[i]->index;packets[i]->pos=-1;
         ret=k->av_interleaved_write_frame(out,packets[i]);k->av_packet_unref(packets[i]);
         if(ret<0){fail(k,ret,"mux write packet");goto done;}
+        ++copied_packets;
         ready[i]=read_mux_packet(k,input[i],packets[i],index[i]);if(ready[i]<0){ret=ready[i];goto done;}
     }
+    if(checkpoint && checkpoint(checkpoint_data)<0){ret=fail(k,AVERROR_EXIT,"mux canceled");goto done;}
     ret=k->av_write_trailer(out);if(ret<0){fail(k,ret,"mux trailer");goto done;}
     ret=k->avio_closep(&out->pb);if(ret<0)fail(k,ret,"mux output close");
 done:
@@ -1082,6 +1186,65 @@ done:
     if(out){if(out->pb)k->avio_closep(&out->pb);k->avformat_free_context(out);}
     return ret;
 }
+
+#ifdef KRONELLO_EXPORT_PROTOTYPES
+/* Experimental ProRes/PCM24 MOV path. One audio demux packet is retained;
+ * delayed video packets keep the same checked span table as normal encoding.
+ * No video intermediate or video demux/packet reread is produced. */
+static int direct_audio_until(Encoder *e,int64_t dts,AVRational base,int finish) {
+    Km *k=e->k;
+    AVStream *input=e->direct_audio->streams[e->direct_index];
+    while(e->direct_ready && (finish || k->av_compare_ts(e->direct_packet->dts,input->time_base,dts,base)<=0)) {
+        k->av_packet_rescale_ts(e->direct_packet,input->time_base,e->direct_stream->time_base);
+        e->direct_packet->stream_index=e->direct_stream->index;e->direct_packet->pos=-1;
+        int ret=k->av_interleaved_write_frame(e->format,e->direct_packet);
+        k->av_packet_unref(e->direct_packet);
+        if(ret<0)return fail(k,ret,"direct PCM packet write");
+        e->direct_ready=read_mux_packet(k,e->direct_audio,e->direct_packet,e->direct_index);
+        if(e->direct_ready<0)return e->direct_ready;
+    }
+    return 0;
+}
+int km_encoder_direct_pcm_mux(Encoder *e,const char *audio,const char *render_hash,const char *export_hash) {
+    Km *k=e->k;AVFormatContext *out=NULL;
+    if(e->direct_audio || e->span_count || e->codec->codec_id!=AV_CODEC_ID_PRORES ||
+       e->codec->color_primaries!=AVCOL_PRI_BT709)
+        return fail(k,AVERROR(EINVAL),"direct mux requires a fresh SDR ProRes encoder");
+    e->direct_audio=km_probe_open(k,audio);if(!e->direct_audio)return -1;
+    e->direct_index=k->av_find_best_stream(e->direct_audio,AVMEDIA_TYPE_AUDIO,-1,-1,NULL,0);
+    if(e->direct_index<0)return fail(k,e->direct_index,"direct PCM stream missing");
+    AVStream *input=e->direct_audio->streams[e->direct_index];
+    if(input->codecpar->codec_id!=AV_CODEC_ID_PCM_S24LE || input->codecpar->sample_rate!=48000 ||
+       input->codecpar->ch_layout.nb_channels!=2 || input->start_time!=0 || input->duration<=0)
+        return fail(k,AVERROR_INVALIDDATA,"direct mux requires zero-origin stereo PCM24/48k");
+    e->direct_packet=k->av_packet_alloc();if(!e->direct_packet)return fail(k,AVERROR(ENOMEM),"direct PCM packet");
+    int ret=k->avformat_alloc_output_context2(&out,NULL,"mov",e->format->url);
+    if(ret<0 || !out)return fail(k,ret<0?ret:AVERROR(ENOMEM),"direct MOV context");
+    AVStream *video=k->avformat_new_stream(out,NULL),*sound=k->avformat_new_stream(out,NULL);
+    if(!video || !sound){ret=fail(k,AVERROR(ENOMEM),"direct MOV streams");goto failed;}
+    ret=k->avcodec_parameters_copy(video->codecpar,e->stream->codecpar);if(ret<0)goto failed;
+    ret=k->avcodec_parameters_copy(sound->codecpar,input->codecpar);if(ret<0)goto failed;
+    video->codecpar->codec_tag=0;sound->codecpar->codec_tag=0;
+    /* Packed full-frame RGBA input is progressive. The intermediate ProRes
+     * demuxer infers this; direct codec parameters must carry it explicitly. */
+    video->codecpar->field_order=AV_FIELD_PROGRESSIVE;
+    video->time_base=e->codec->time_base;sound->time_base=input->time_base;
+    k->av_dict_set(&out->metadata,"kronello_render_snapshot_hash",render_hash,0);
+    k->av_dict_set(&out->metadata,"kronello_export_snapshot_hash",export_hash,0);
+    ret=k->avio_closep(&e->format->pb);if(ret<0)goto failed;
+    ret=k->avio_open(&out->pb,out->url,AVIO_FLAG_WRITE);if(ret<0)goto failed;
+    AVDictionary *options=NULL;char timescale[32];snprintf(timescale,sizeof(timescale),"%d",video->time_base.den);
+    k->av_dict_set(&options,"video_track_timescale",timescale,0);
+    k->av_dict_set(&options,"movflags","use_metadata_tags",0);
+    ret=k->avformat_write_header(out,&options);k->av_dict_free(&options);if(ret<0)goto failed;
+    k->avformat_free_context(e->format);e->format=out;e->stream=video;e->direct_stream=sound;
+    e->direct_ready=read_mux_packet(k,e->direct_audio,e->direct_packet,e->direct_index);
+    return e->direct_ready<0?e->direct_ready:0;
+failed:
+    if(out){if(out->pb)k->avio_closep(&out->pb);k->avformat_free_context(out);}
+    return fail(k,ret,"direct MOV initialization");
+}
+#endif
 
 /* MEDIA-004 GIF delivery. Deterministic indexed-color pipeline kept inside
  * the audited shim instead of an avfilter dependency: phase 1 streams RGBA

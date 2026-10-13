@@ -1,0 +1,47 @@
+{
+  "binary_sha256": "65129ba16048c26bff6592fc0c406b2f50b53ebfa51cd0aa19eaf18b974e2289",
+  "method": "Darwin /usr/bin/time -l maximum resident set size; separate completed-job page-query CLI processes, not sampled worker RSS",
+  "results": [
+    {
+      "total_frames": 1000,
+      "offset": 0,
+      "returned_frames": 64,
+      "response_bytes": 171168,
+      "response_sha256": "5e0e07d4cc1d248ca009c987b2c7782128b0511de115ccfee300a6b5ac008add",
+      "kernel_max_rss_bytes": 15777792,
+      "usage_file": "target/perf-013/query-memory/1000-0.usage.txt"
+    },
+    {
+      "total_frames": 1000,
+      "offset": 936,
+      "returned_frames": 64,
+      "response_bytes": 171406,
+      "response_sha256": "150989ff9026ffb1ae94038cc14ec8963b9ffc131091e4a27bfc8297a41cd548",
+      "kernel_max_rss_bytes": 15826944,
+      "usage_file": "target/perf-013/query-memory/1000-936.usage.txt"
+    },
+    {
+      "total_frames": 10000,
+      "offset": 0,
+      "returned_frames": 64,
+      "response_bytes": 171169,
+      "response_sha256": "96eaad0d096f448b7188501b601de65522a7443a3484bd2e9960b8cc01d58bc6",
+      "kernel_max_rss_bytes": 15859712,
+      "usage_file": "target/perf-013/query-memory/10000-0.usage.txt"
+    },
+    {
+      "total_frames": 10000,
+      "offset": 9936,
+      "returned_frames": 64,
+      "response_bytes": 171600,
+      "response_sha256": "69fb0b9cca752759a5f87737d2715d8a079d59fd6741fab66df3e7685c814b18",
+      "kernel_max_rss_bytes": 15843328,
+      "usage_file": "target/perf-013/query-memory/10000-9936.usage.txt"
+    }
+  ],
+  "source": {
+    "path": "target/perf-013/query-memory/evidence.json",
+    "bytes": 1549,
+    "sha256": "95561880571a64a74e3816fd7fe0f17739a18fa4d0fbad01dce504e17af3145d"
+  }
+}

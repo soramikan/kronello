@@ -42,7 +42,8 @@ pub struct DecodedAudio {
 /// given [`ChannelMask`] order. The mask is constant within a stream.
 pub type AudioChunkSink<'a> = dyn FnMut(&[f32], ChannelMask) -> Result<(), MediaError> + 'a;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AudioDecodeReport {
     pub source_start: Time,
     pub source_rate: u32,

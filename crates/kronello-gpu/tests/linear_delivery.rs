@@ -191,7 +191,7 @@ fn actual_gpu_linear_matches_pair_with_halo_and_retains_validation() {
     // wgpu readback copies include the 256-byte padded row pitch.
     let readback_bytes = (u64::from(size[0]) * 8).div_ceil(256) * 256 * u64::from(size[1]);
     assert_eq!(transfers.gpu_readback_operations, 2);
-    assert_eq!(transfers.gpu_wait_operations, 2);
+    assert_eq!(transfers.gpu_wait_operations, 1);
     assert_eq!(transfers.gpu_readback_bytes, readback_bytes + 4);
     let warm_both = gpu.execute(&dag).unwrap();
     let both_transfers = gpu.transfer_stats().unwrap();
@@ -215,6 +215,47 @@ fn actual_gpu_linear_matches_pair_with_halo_and_retains_validation() {
             .as_ref()
             .map_or(1, |m| m.samples.len() as u64);
         assert_eq!(transfers.gpu_readback_operations, 2 * 2 * samples);
-        assert_eq!(transfers.gpu_wait_operations, 2 * 2 * samples);
+        assert_eq!(transfers.gpu_wait_operations, 2 * samples);
     }
+}
+
+#[test]
+#[ignore = "actual Metal staging reuse and detached CPU consumer"]
+fn completed_staging_is_reused_without_mutating_retained_cpu_pixels() {
+    let reference = snapshot(false, false);
+    let scene = build_scene_ir(&reference, request().time, &[]).unwrap();
+    let tile = OutputRegion {
+        origin: [0.0; 2],
+        extent: [32.0; 2],
+        pixels: [32, 32],
+    };
+    let dag = build_render_dag(&scene, reference.profile(), tile).unwrap();
+    let gpu = GpuContext::new().unwrap();
+    let diagnostics = ExecutionDiagnosticsCollector::enabled();
+    let _scope = diagnostics.activate();
+    let retained = gpu
+        .execute_linear_with_cache(&dag, &mut RenderCache::new(CacheConfig::default()))
+        .unwrap();
+    let original = retained.clone();
+    let allocation_count = diagnostics.snapshot().unwrap().counts["gpu_staging_buffer_allocations"];
+    let mut different_scene = scene;
+    different_scene.nodes[0].opacity = 0.25;
+    let different = build_render_dag(&different_scene, reference.profile(), tile).unwrap();
+    let second = gpu
+        .execute_linear_with_cache(&different, &mut RenderCache::new(CacheConfig::default()))
+        .unwrap();
+    assert_eq!(retained, original);
+    assert_ne!(second, original);
+    let measurement = diagnostics.snapshot().unwrap();
+    assert_eq!(
+        measurement.counts["gpu_staging_buffer_allocations"],
+        allocation_count
+    );
+    assert_eq!(measurement.counts["gpu_staging_buffer_reuses"], 2);
+    assert!(measurement.peak_payload_bytes["gpu_staging_pool"] <= 16 * 1024 * 1024);
+    gpu.clear_texture_cache().unwrap();
+    assert_eq!(
+        gpu.allocation_stats().readback_buffers.live_payload_bytes,
+        0
+    );
 }

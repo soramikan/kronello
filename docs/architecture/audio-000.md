@@ -1,5 +1,9 @@
 # AUDIO-000 基本音声と A/V 書き出し
 
+## PERF-011: 共有mixと任意spool再利用
+
+[ADR-0163](../adr/0163-shared-export-audio-and-verified-spools.md)に従い、同じ固定plan/意味版/source lock/範囲/layout/gain/effects/clippingの出力はmix/session/PCM24量子化を共有する。最大4096framesかつgroup最小codec block以下のquantumと小さいcodec adapterで、各codecのblock・single final partial・priming/padding・PTSを維持する。任意の外部spool cacheはsource原点からの全量decodeで作り、元source全文hash/fingerprint、checksum index全文と参照windowを検証する。既定のprivate spool、全authored range検査、型付き失敗と最終publicationを維持し、range decodeや追加並行処理を導入しない。cold/warmの採否と全受け入れは[PERF-011](../testing/perf-011.md)で追跡する。
+
 設計契約: [ADR-0049](../adr/0049-audio-bus-timing-and-codec.md)。基本音声の library API を実装する。AUDIO-000 の範囲は定数音量の明示配置。AUDIO-003 で文書由来の再帰配置・音量 Property / Curve と共有 `render.export` / `render.submit` を追加した。AUDIO-004 は明示 resample・audio clip Gain effect・Generator・crossfade を movie profile 3 へ追加した。AUDIO-002 は buffered realtime playback を追加した（実デバイスの受け入れは検証文書に記録）。pitch-preserving stretch は後続。RENDER-003 で movie export の長尺 streaming を追加した（ADR-0079）。AUDIO-007/008 は音声用 clip effects（EQ・HPF/LPF・compressor・limiter）と LUFS 計測・ノーマライズ、AUDIO-009 は再生メーター・スクラブ・ミキサーを追加した（ADR-0117）。
 
 ## 依存境界
@@ -174,11 +178,11 @@ CPU / export / synthetic callback checks を実時間同期の受け入れに読
 ## RENDER-003 の有界 movie 音声
 
 `decode_audio_stream` は finite / PTS continuity を検査して native chunk を順に渡す。
-movie export は hash lock を decode 前後で確認し、destination volume の f32 stereo spoolを
+movie export は hash lock を decode 前後で確認し、source自身のlayoutの48kHz f32 spoolを
 `AudioSourceReader` から4,096 framesの窓で読む。純粋 mixer に file / codec を渡さず、
 全 source を同時に `AudioBuffer` に展開しない。source / aggregate / movie全Busの10分上限を外し、
 既存の `AudioBuffer` / 単体 decode 上限と batchあたりsample operations予算は維持する。
-Bus は codec block（PCM24:4,096、ALAC: native block）ごとに絶対sample格子から生成する。
+Bus はADR-0163の同一音声groupごとに絶対sample格子から生成し、codec blockはadapterで維持する。
 最後の partial blockだけを許し、sample count とzero-origin PTSを従来と一致させる。
 `AudioSources` を使う既存 `mix` / `DocumentAudioPlan::mix` は同じ reader経路の互換wrapper。
 [ADR-0079](../adr/0079-bounded-streaming-movie-export.md)、[検証](../testing/render-003.md)。

@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "name": "mux-private-probe-reuse",
+  "document": {
+    "id": "cae2b435-38fa-43ac-ad1e-35bc0dd7a381",
+    "schema_version": 1,
+    "semantic_version": 1,
+    "name": "PERF-006 fixed real 4K video",
+    "compositions": [],
+    "curves": [],
+    "sequences": [
+      {
+        "id": "f9266381-708a-4cba-95bb-6d1cba1bdab8",
+        "extent": {
+          "width": 3840.0,
+          "height": 2160.0
+        },
+        "frame_rate": {
+          "num": "24",
+          "den": "1"
+        },
+        "audio_rate": 48000,
+        "working_space": "linear_rec709",
+        "tracks": [],
+        "transitions": [],
+        "markers": []
+      }
+    ],
+    "assets": []
+  },
+  "submit": {
+    "render": {
+      "input": {
+        "target": {
+          "kind": "sequence",
+          "sequence": "f9266381-708a-4cba-95bb-6d1cba1bdab8"
+        },
+        "region": {
+          "origin": [
+            0,
+            0
+          ],
+          "extent": [
+            3840,
+            2160
+          ],
+          "pixels": [
+            64,
+            64
+          ]
+        },
+        "profile": {
+          "working_space": "linear_rec709",
+          "flatten_tolerance_px": 0.02
+        },
+        "fonts": []
+      },
+      "range": {
+        "start": {
+          "num": "0",
+          "den": "1"
+        },
+        "end": {
+          "num": "2",
+          "den": "1"
+        }
+      },
+      "frame_rate": {
+        "num": "24",
+        "den": "1"
+      }
+    },
+    "chapters": "transfer",
+    "output": {
+      "format": "pro_res_mov",
+      "clips": [],
+      "background": [
+        0.1,
+        0.1,
+        0.1
+      ]
+    }
+  },
+  "sources": [],
+  "fixture_generation": [
+    "ffmpeg",
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=3840x2160:rate=24:duration=2",
+    "-c:v",
+    "mpeg4",
+    "-q:v",
+    "4",
+    "-threads",
+    "1",
+    "-pix_fmt",
+    "yuv420p",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+    "-colorspace",
+    "bt709",
+    "-color_range",
+    "tv",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact",
+    "-map_metadata",
+    "-1",
+    "/Users/sora/Repositories/soramikan/kronello/target/perf-006/fixed-cases-v3/source-4k.mov"
+  ],
+  "expected_frames": 48,
+  "output_name": "movie.mov",
+  "recommended_backend": "cpu-reference"
+}

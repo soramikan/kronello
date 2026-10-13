@@ -6,8 +6,8 @@ use kronello_audio::{
 };
 use kronello_model::{ColorSpace, DocumentObject};
 use kronello_render::{
-    FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot, frame_samples,
-    render_frame_linear_tiles,
+    ExportRenderSession, FrameMetadata, FrameRequest, OutputRegion, RenderBackend, RenderSnapshot,
+    frame_sample_plan,
 };
 use kronello_text::FontData;
 use kronello_time::{FrameRate, Rational, TimeRange};
@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::audio::{publish_file, stage_file};
+#[path = "export_audio.rs"]
+mod audio_pipeline;
+#[path = "export_color.rs"]
+mod color;
 #[path = "export_pipeline.rs"]
 mod pipeline;
 
@@ -1009,6 +1013,9 @@ pub struct AvExportReport {
     pub request: AvExportRequest,
     pub sample_range: std::ops::Range<i64>,
     pub frames: Vec<FrameMetadata>,
+    /// Bounded external metadata for long exports; inline frames are empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_metadata: Option<kronello_render::FrameMetadataManifest>,
     /// Primary leg transfer report; absent for audio-only deliveries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video: Option<MediaPathReport>,
@@ -1021,6 +1028,9 @@ pub struct AvExportReport {
     pub outputs: Vec<AvExportOutputReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub streaming: Option<StreamingExportReport>,
+    /// Opt-in execution measurements, excluded from snapshot identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub performance: Option<crate::ExportDiagnostics>,
 }
 impl MediaRuntime {
     /// Read the stream's container codec tag (little-endian FourCC when textual).
@@ -1134,6 +1144,8 @@ impl MediaRuntime {
             profile,
             audio_layout,
             chapters,
+            None,
+            None,
         )?;
         temp.as_file().sync_all()?;
         publish_file(temp, output)?;
@@ -1153,6 +1165,8 @@ impl MediaRuntime {
         profile: MovieProfile,
         audio_layout: kronello_model::ChannelMask,
         chapters: &[MediaChapter],
+        prepared: Option<(&MediaProbe, &MediaProbe)>,
+        checkpoint: Option<&mut dyn FnMut() -> Result<(), MediaError>>,
     ) -> Result<(tempfile::NamedTempFile, MediaProbe), MediaError> {
         for hash in [render_hash, export_hash] {
             if hash.len() != 64
@@ -1167,8 +1181,14 @@ impl MediaRuntime {
         }
         let video = video.canonicalize()?;
         let audio = audio.canonicalize()?;
-        let video_input = self.probe(&video)?;
-        let audio_input = self.probe(&audio)?;
+        let fresh;
+        let (video_input, audio_input) = if let Some(inputs) = prepared {
+            kronello_render::count_execution("mux_reused_private_probes", 2);
+            inputs
+        } else {
+            fresh = (self.probe(&video)?, self.probe(&audio)?);
+            (&fresh.0, &fresh.1)
+        };
         let video_stream = video_input
             .streams
             .iter()
@@ -1197,6 +1217,7 @@ impl MediaRuntime {
             profile,
             audio_layout.channels() as u32,
             chapters,
+            checkpoint,
         )?;
         let probe = self.probe(temp.path())?;
         probe.verify_movie_layout(profile, audio_layout)?;
@@ -1328,6 +1349,15 @@ impl MediaRuntime {
         request: &AvExportRequest,
         checkpoint: &mut dyn FnMut(u64) -> Result<(), MediaError>,
     ) -> Result<AvExportReport, MediaError> {
+        let diagnostics = crate::ExportDiagnosticsCollector::from_environment();
+        let _diagnostic_scope = diagnostics.activate();
+        let preparation = diagnostics.time("preparation");
+        let mut measured_checkpoint = |completed| {
+            let _time = diagnostics.time("checkpoint_callback");
+            diagnostics.count("checkpoint_callbacks", 1);
+            checkpoint(completed)
+        };
+        let checkpoint: &mut dyn FnMut(u64) -> Result<(), MediaError> = &mut measured_checkpoint;
         checkpoint(0)?;
         if snapshots.is_empty() || snapshots.len() != request.outputs.len() + 1 {
             return Err(MediaError::InvalidInput(
@@ -1357,8 +1387,9 @@ impl MediaRuntime {
                 ));
             }
         }
-        let times = frame_samples(request.range, request.frame_rate)?;
-        if times.is_empty() {
+        let times = frame_sample_plan(request.range, request.frame_rate)?;
+        let frame_count = times.frame_count();
+        if frame_count == 0 {
             return Err(MediaError::InvalidInput("empty export".into()));
         }
         let samples = sample_range(request.range)?;
@@ -1512,6 +1543,7 @@ impl MediaRuntime {
             .unwrap_or(Path::new("."));
         // Every intermediate is on the destination volume and owned by RAII.
         let stage = tempfile::tempdir_in(parent)?;
+        drop(preparation);
         // Decode the union of audio sources referenced by any leg once.
         let mut sources = crate::streaming::SpoolSources::new();
         for snapshot in snapshots {
@@ -1527,6 +1559,7 @@ impl MediaRuntime {
                             _ => None,
                         })
                         .ok_or_else(|| MediaError::AssetMissing(clip.asset.to_string()))?;
+                    let _decode = diagnostics.time("audio_decode_spool");
                     sources.decode(
                         self,
                         asset,
@@ -1538,84 +1571,22 @@ impl MediaRuntime {
                 }
             }
         }
-        // Audio pass: one encoder per audio leg. Movie legs write an
-        // intermediate inside the stage dir; elementary MP3/FLAC legs encode
-        // straight into their staged publish artifact.
-        let mut audio_reports: Vec<Option<AudioEncodeReport>> = Vec::with_capacity(legs.len());
-        let mut audio_files: Vec<Option<LegStage>> = Vec::with_capacity(legs.len());
-        for (index, leg) in legs.iter().enumerate() {
-            let Some(kind) = leg.profile.audio_kind() else {
-                audio_reports.push(None);
-                audio_files.push(None);
-                continue;
-            };
-            let file = if leg.profile.shape() == DeliveryShape::AudioOnly {
-                LegStage::Publish(stage_file(&leg.output)?)
-            } else {
-                LegStage::Intermediate(
-                    stage
-                        .path()
-                        .join(format!("audio_{index}.{}", kind.intermediate_suffix())),
-                )
-            };
-            // ADR-0124: the snapshot declares the single output layout; the
-            // bus converts sources deterministically and never folds down.
-            let layout = leg.snapshot.audio_layout;
-            let mut encoder =
-                crate::ffi::NativeAudioEncoder::open(&self.native, file.path(), kind, layout)?;
-            let plan = if leg.snapshot.audio == AudioSourceMode::Document {
-                Some(document_plan(
-                    &leg.snapshot.render,
-                    leg.snapshot.schema_version,
-                )?)
-            } else {
-                None
-            };
-            let mut clipped_samples = 0_usize;
-            // Sequential encoder blocks resume stateful DSP/WSOLA chains
-            // instead of replaying each placement from its start; output is
-            // bit-identical to the stateless evaluator (ADR-0117).
-            let mut session = plan.as_ref().map(|plan| plan.playback_session());
-            let mut start = samples.start;
-            while start < samples.end {
-                checkpoint(0)?;
-                let end = samples.end.min(
-                    start
-                        .checked_add(encoder.block as i64)
-                        .ok_or_else(|| MediaError::InvalidInput("audio batch overflow".into()))?,
-                );
-                let range = TimeRange::new(
-                    SAMPLE_RATE.sample_to_time(start)?,
-                    SAMPLE_RATE.sample_to_time(end)?,
-                )?;
-                let bus = match (&plan, session.as_mut()) {
-                    (Some(plan), Some(session)) => {
-                        plan.mix_channels_streaming(&sources, range, layout, session)?
-                    }
-                    (Some(plan), None) => plan.mix_channels(&sources, range, layout)?,
-                    (None, _) => {
-                        kronello_audio::mix_channels(&leg.snapshot.clips, &sources, range, layout)?
-                    }
-                };
-                let quantized = bus.quantize_pcm24(request.clipping)?;
-                clipped_samples = clipped_samples
-                    .checked_add(quantized.clipped_samples)
-                    .ok_or_else(|| MediaError::InvalidInput("clipping count overflow".into()))?;
-                encoder.frame(&quantized.samples)?;
-                start = end;
-            }
-            encoder.finish()?;
-            drop(encoder);
-            audio_reports.push(Some(AudioEncodeReport {
-                codec: kind.codec_name().into(),
-                sample_rate: 48_000,
-                channels: layout.channels() as u32,
-                frames: usize::try_from(samples.end - samples.start)
-                    .map_err(|_| MediaError::InvalidInput("audio count overflow".into()))?,
-                clipped_samples,
-            }));
-            audio_files.push(Some(file));
-        }
+        let audio_pipeline::ResultData {
+            reports: mut audio_reports,
+            files: mut audio_files,
+        } = audio_pipeline::run(
+            audio_pipeline::Config {
+                runtime: self,
+                legs: &legs,
+                render_hash: &render_hash,
+                samples: samples.clone(),
+                stage: stage.path(),
+                clipping: request.clipping,
+                diagnostics: diagnostics.clone(),
+            },
+            &sources,
+            checkpoint,
+        )?;
         let audio_spool_write_bytes = sources.decoded_bytes;
         let audio_window_read_bytes = sources.read_bytes();
         drop(sources);
@@ -1632,93 +1603,93 @@ impl MediaRuntime {
                 background: leg.background,
                 output: leg.output.clone(),
                 audio_layout: leg.snapshot.audio_layout,
+                color: if let Some(transfer) = leg.profile.hdr_transfer() {
+                    color::OutputColor::Hdr(transfer)
+                } else {
+                    color::OutputColor::Sdr {
+                        tone_map: render_hdr.is_some() && leg.profile.sdr_delivery_conversion(),
+                    }
+                },
             })
             .collect();
-        let mut metadata = Vec::new();
+        let mut metadata = ExportMetadataOutput::empty();
+        let conversion_owners = pipeline::conversion_owners(&video_legs);
         let pipeline::ResultData {
             files: video_files,
             reports: mut video_reports,
             mut staged,
             mut probes,
         } = if video_legs.iter().any(|leg| leg.profile.has_video()) {
-            let ticks: Vec<_> = times
-                .iter()
-                .map(|(_, time)| {
-                    let tick = time
-                        .checked_sub(request.range.start())?
-                        .checked_div(time_base)?;
-                    if tick.denominator() != 1 || tick.numerator() < 0 {
-                        return Err(MediaError::InvalidInput(
-                            "integral nonnegative frame PTS required".into(),
-                        ));
-                    }
-                    Ok(tick.numerator())
-                })
-                .collect::<Result<_, MediaError>>()?;
+            let mut render_session = ExportRenderSession::new(snapshot.render.clone(), fonts)?;
+            // Exact frame-boundary validation above makes relative PTS the
+            // ordinal and every span one tick. No full-export tick Vec needed.
             let config = pipeline::Config {
                 capabilities: self.capabilities.clone(),
                 stage: stage.path().into(),
                 pixels: request.region.pixels,
                 time_base,
-                frames: times.len(),
+                frames: frame_count,
                 bundles: self.video_pipeline_mode.bundles(),
                 duration: expected_video,
                 legs: video_legs.clone(),
+                diagnostics: diagnostics.clone(),
             };
             let (frames, result) = pipeline::run(config, checkpoint, |producer, checkpoint| {
-                let mut frames = Vec::with_capacity(times.len());
-                for (number, (index, time)) in times.iter().enumerate() {
+                let mut frames = ExportMetadataSink::new(
+                    metadata_directory(&request.output),
+                    kronello_render::FrameMetadataIdentity {
+                        render_snapshot_hash: render_hash.clone(),
+                        frame_rate: request.frame_rate,
+                        start_frame: times.start_frame(),
+                        frame_count: frame_count as u64,
+                    },
+                )?;
+                for (number, sample) in times.enumerate() {
+                    let (index, time) = sample?;
                     checkpoint(number as u64)?;
                     let mut bundle = producer.acquire()?;
-                    let mut frame_metadata = render_frame_linear_tiles(
-                        &snapshot.render,
-                        fonts,
+                    let render = diagnostics.time("render_tiles_and_conversion");
+                    let mut frame_metadata = render_session.render_linear_tiles(
                         backend,
                         FrameRequest {
-                            time: *time,
+                            time,
                             region: request.region,
                         },
                         &mut |[x, y], tile, output| {
-                            for (leg, buffer) in video_legs.iter().zip(&mut bundle) {
-                                let stride = leg.stride();
-                                if stride == 0 {
+                            let _conversion = diagnostics.time("output_color_conversion_copy");
+                            diagnostics.count("rendered_tiles", 1);
+                            diagnostics.peak_payload("linear_tile", (output.len() as u64) * 16);
+                            for (index, leg) in video_legs.iter().enumerate() {
+                                if leg.stride() == 0 || conversion_owners[index] != index {
                                     continue;
                                 }
-                                let bytes = if let Some(transfer) = leg.profile.hdr_transfer() {
-                                    hdr_rgba(&output, leg.background, transfer)
-                                } else if render_hdr.is_some()
-                                    && leg.profile.sdr_delivery_conversion()
-                                {
-                                    let mapped: Vec<_> = output
-                                        .iter()
-                                        .map(|p| {
-                                            kronello_render::hdr_to_sdr_linear([
-                                                p[0] + leg.background[0] * (1.0 - p[3]),
-                                                p[1] + leg.background[1] * (1.0 - p[3]),
-                                                p[2] + leg.background[2] * (1.0 - p[3]),
-                                                1.0,
-                                            ])
-                                        })
-                                        .collect();
-                                    bt709_rgba(&mapped, [0.0; 3])
-                                } else {
-                                    bt709_rgba(&output, leg.background)
-                                }
-                                .map_err(|e| {
-                                    kronello_render::RenderError::UnsupportedFeature(e.to_string())
+                                diagnostics.count("output_tile_conversions", 1);
+                                color::packed_into(
+                                    &output,
+                                    leg.background,
+                                    leg.color,
+                                    &mut bundle[index],
+                                    width * leg.stride(),
+                                    [x, y],
+                                    tile.pixels,
+                                )
+                                .map_err(|error| {
+                                    kronello_render::RenderError::UnsupportedFeature(
+                                        error.to_string(),
+                                    )
                                 })?;
-                                for row in 0..tile.pixels[1] as usize {
-                                    let destination =
-                                        ((y as usize + row) * width + x as usize) * stride;
-                                    let source = row * tile.pixels[0] as usize * stride;
-                                    let row_bytes = tile.pixels[0] as usize * stride;
-                                    buffer[destination..destination + row_bytes]
-                                        .copy_from_slice(&bytes[source..source + row_bytes]);
-                                }
+                                diagnostics.count(
+                                    "output_direct_bytes",
+                                    tile.pixels[0] as u64
+                                        * tile.pixels[1] as u64
+                                        * leg.stride() as u64,
+                                );
                             }
                             Ok(())
                         },
                     )?;
+                    drop(render);
+                    diagnostics.count("rendered_frames", 1);
                     if frame_metadata.snapshot_content_hash != render_hash {
                         return Err(MediaError::Encode(
                             "video snapshot identity mismatch".into(),
@@ -1726,17 +1697,10 @@ impl MediaRuntime {
                     }
                     frame_metadata.frame_index = Some(index.to_string());
                     frame_metadata.sequence_number = Some(number as u64);
-                    frames.push(frame_metadata);
-                    let span = if let Some(next) = ticks.get(number + 1) {
-                        next - ticks[number]
-                    } else if number > 0 {
-                        ticks[number] - ticks[number - 1]
-                    } else {
-                        1
-                    };
-                    producer.frame(bundle, ticks[number], span)?;
+                    frames.push(frame_metadata)?;
+                    producer.frame(bundle, number as i64, 1)?;
                 }
-                Ok(frames)
+                frames.finish()
             })?;
             metadata = frames;
             result
@@ -1759,6 +1723,7 @@ impl MediaRuntime {
                         return Err(MediaError::Encode("missing staged audio output".into()));
                     };
                     audio_stage_bytes += std::fs::metadata(temp.path())?.len();
+                    let _validation = diagnostics.time("audio_output_validation");
                     let probe = self.probe(temp.path())?;
                     probe.verify_delivery(leg.profile, leg.snapshot.audio_layout)?;
                     let slack = Rational::new(leg.profile.audio_frame_slack(), 48_000)?;
@@ -1796,6 +1761,7 @@ impl MediaRuntime {
                     };
                     video_stage_bytes += std::fs::metadata(video_file)?.len();
                     audio_stage_bytes += std::fs::metadata(audio_path)?.len();
+                    let intermediate_validation = diagnostics.time("intermediate_validation");
                     let video_probe = self.probe(video_file)?;
                     let audio_probe = self.probe(audio_path)?;
                     let audio_slack = Rational::new(leg.profile.audio_frame_slack(), 48_000)?;
@@ -1824,6 +1790,8 @@ impl MediaRuntime {
                             video_probe.streams, audio_probe.streams
                         )));
                     }
+                    drop(intermediate_validation);
+                    let _mux = diagnostics.time("mux_container_validation");
                     let (temp, probe) = self.mux_movie_stage(
                         video_file,
                         audio_path,
@@ -1833,6 +1801,8 @@ impl MediaRuntime {
                         leg.profile,
                         leg.snapshot.audio_layout,
                         &leg_chapters[index],
+                        Some((&video_probe, &audio_probe)),
+                        Some(&mut || checkpoint(frame_count as u64)),
                     )?;
                     staged[index] = Some(temp);
                     probes[index] = Some(probe);
@@ -1840,9 +1810,13 @@ impl MediaRuntime {
                 DeliveryShape::VideoOnly => {}
             }
         }
-        checkpoint(times.len() as u64)?;
+        checkpoint(frame_count as u64)?;
+        if let Some(manifest) = &metadata.manifest {
+            manifest.verify()?;
+        }
         // All legs verified; publish in request order. A failure here is still
         // atomic per destination and never reports partial success.
+        let publication = diagnostics.time("media_publication");
         let mut reports = Vec::with_capacity(legs.len());
         for (index, leg) in legs.iter().enumerate() {
             let temp = staged[index]
@@ -1862,9 +1836,11 @@ impl MediaRuntime {
                 warnings: std::mem::take(&mut leg_warnings[index]),
             });
         }
+        drop(publication);
         let primary = reports[0].clone();
+        let (frames, frame_metadata) = metadata.commit();
         Ok(AvExportReport {
-            schema_version: 1,
+            schema_version: if frame_metadata.is_some() { 2 } else { 1 },
             render_snapshot_hash: render_hash.clone(),
             export_snapshot_hash: export_hashes[0].clone(),
             audio_render_snapshot_hash: render_hash,
@@ -1873,11 +1849,13 @@ impl MediaRuntime {
             movie_profile: snapshot.movie_profile,
             request: request.clone(),
             sample_range: sample_range(request.range)?,
-            frames: metadata,
+            frames,
+            frame_metadata,
             video: primary.video.clone(),
             audio: primary.audio.clone(),
             probe: primary.probe.clone(),
             outputs: reports,
+            performance: diagnostics.snapshot(),
             streaming: Some(StreamingExportReport {
                 audio_spool_write_bytes,
                 audio_window_read_bytes,
@@ -1886,6 +1864,110 @@ impl MediaRuntime {
                 published_bytes: std::fs::metadata(&request.output).ok().map(|m| m.len()),
             }),
         })
+    }
+}
+/// Deterministic sidecar name; workers relocate this under their publication fence.
+pub fn metadata_directory(output: &Path) -> PathBuf {
+    let mut name = output.file_name().unwrap_or_default().to_os_string();
+    name.push(".frames");
+    output.with_file_name(name)
+}
+struct ExportMetadataSink {
+    root: PathBuf,
+    identity: kronello_render::FrameMetadataIdentity,
+    inline: Vec<FrameMetadata>,
+    inline_bytes: usize,
+    writer: Option<kronello_render::FrameMetadataWriter>,
+}
+impl ExportMetadataSink {
+    fn new(
+        root: PathBuf,
+        identity: kronello_render::FrameMetadataIdentity,
+    ) -> Result<Self, MediaError> {
+        let mut sink = Self {
+            root,
+            identity,
+            inline: Vec::new(),
+            inline_bytes: 0,
+            writer: None,
+        };
+        if sink.identity.frame_count > 64 {
+            sink.spill()?;
+        }
+        Ok(sink)
+    }
+    fn spill(&mut self) -> Result<(), MediaError> {
+        if self.root.exists() {
+            return Err(MediaError::OutputExists(self.root.clone()));
+        }
+        let mut writer =
+            kronello_render::FrameMetadataWriter::new(&self.root, self.identity.clone())?;
+        for frame in self.inline.drain(..) {
+            writer.push(frame)?;
+        }
+        self.writer = Some(writer);
+        self.inline_bytes = 0;
+        Ok(())
+    }
+    fn push(&mut self, frame: FrameMetadata) -> Result<(), MediaError> {
+        if self.writer.is_none() {
+            let bytes = serde_json::to_vec(&frame)?.len();
+            if self.inline.len() == 64 || self.inline_bytes.saturating_add(bytes) > 1024 * 1024 {
+                self.spill()?;
+            } else {
+                self.inline_bytes += bytes;
+                kronello_render::observe_execution_payload(
+                    "inline_frame_metadata_serialized",
+                    self.inline_bytes as u64,
+                );
+                self.inline.push(frame);
+                return Ok(());
+            }
+        }
+        self.writer
+            .as_mut()
+            .expect("spilled metadata writer")
+            .push(frame)?;
+        Ok(())
+    }
+    fn finish(self) -> Result<ExportMetadataOutput, MediaError> {
+        Ok(ExportMetadataOutput {
+            frames: self.inline,
+            manifest: self.writer.map(|writer| writer.finish()).transpose()?,
+            committed: false,
+        })
+    }
+}
+struct ExportMetadataOutput {
+    frames: Vec<FrameMetadata>,
+    manifest: Option<kronello_render::FrameMetadataManifest>,
+    committed: bool,
+}
+impl ExportMetadataOutput {
+    fn empty() -> Self {
+        Self {
+            frames: Vec::new(),
+            manifest: None,
+            committed: false,
+        }
+    }
+    fn commit(
+        mut self,
+    ) -> (
+        Vec<FrameMetadata>,
+        Option<kronello_render::FrameMetadataManifest>,
+    ) {
+        self.committed = true;
+        (std::mem::take(&mut self.frames), self.manifest.take())
+    }
+}
+impl Drop for ExportMetadataOutput {
+    fn drop(&mut self) {
+        if !self.committed
+            && let Some(manifest) = &self.manifest
+        {
+            let _ = std::fs::remove_dir_all(&manifest.root);
+        }
     }
 }
 /// One resolved delivery leg inside `export_delivery`: the primary output or
@@ -1958,6 +2040,7 @@ fn export_chapters(
     }
     Ok(chapters)
 }
+#[cfg(test)]
 fn hdr_rgba(
     pixels: &[[f32; 4]],
     background: [f32; 3],
@@ -1982,6 +2065,7 @@ fn hdr_rgba(
     }
     Ok(bytes)
 }
+#[cfg(test)]
 fn bt709_rgba(pixels: &[[f32; 4]], background: [f32; 3]) -> Result<Vec<u8>, MediaError> {
     let mut rgba = Vec::with_capacity(pixels.len() * 4);
     for pixel in pixels {

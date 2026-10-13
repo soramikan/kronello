@@ -221,6 +221,7 @@ impl SimulationCachePool {
 /// Owned by the caller and reusable across snapshots, frames, and output regions.
 /// Failed computations are never retained; clearing preserves cumulative counters.
 pub struct RenderCache {
+    verified_fonts: Option<kronello_text::VerifiedFonts>,
     values: Lru<Value>,
     layout: Lru<LayoutResult>,
     geometry: Lru<FlattenedPath>,
@@ -237,6 +238,7 @@ impl Default for RenderCache {
 impl RenderCache {
     pub fn new(config: CacheConfig) -> Self {
         Self {
+            verified_fonts: None,
             values: Lru::new(config.values),
             layout: Lru::new(config.layout),
             geometry: Lru::new(config.geometry),
@@ -245,6 +247,9 @@ impl RenderCache {
             simulation_stats: SimulationCacheStats::default(),
             simulation: SimulationCachePool::new(config.simulation),
         }
+    }
+    pub(crate) fn bind_verified_fonts(&mut self, fonts: kronello_text::VerifiedFonts) {
+        self.verified_fonts = Some(fonts);
     }
     pub fn stats(&self) -> RenderCacheStats {
         RenderCacheStats {
@@ -334,9 +339,16 @@ impl RenderCache {
     ) -> Result<LayoutResult, RenderError> {
         // Validate bytes on every call: warm cache must not hide missing/corrupt locks.
         text.validate()?;
+        let verified = self
+            .verified_fonts
+            .as_ref()
+            .filter(|proof| proof.matches(fonts));
         let cache_key = layout_key(text)?;
         let mut layout = if let Some(layout) = self.layout.get(cache_key) {
-            kronello_text::validate_fonts(text, fonts)?;
+            match verified {
+                Some(proof) => proof.validate(text)?,
+                None => kronello_text::validate_fonts(text, fonts)?,
+            }
             layout
         } else {
             let mut canonical = text.clone();
@@ -345,7 +357,10 @@ impl RenderCache {
                 style.fill = Color::from_srgb8([0, 0, 0], None);
                 style.gradient = None;
             }
-            let result = kronello_text::layout(&canonical, fonts)?;
+            let result = match verified {
+                Some(proof) => proof.layout(&canonical)?,
+                None => kronello_text::layout(&canonical, fonts)?,
+            };
             // Accounts for outlines and all source/cluster/line metadata.
             let bytes = std::mem::size_of::<LayoutResult>()
                 + std::mem::size_of_val(result.lines.as_slice())

@@ -66,6 +66,7 @@ fn lower_impl(
     dag: &RenderDag,
     resident: Option<&std::collections::BTreeMap<usize, crate::ResidentImage>>,
 ) -> Result<(RenderSize, DrawScene, WorkingSpace), RenderError> {
+    let _measure = kronello_render::measure_execution_stage("backend_dag_lowering_host");
     let mut scene = DrawScene {
         nodes: vec![],
         roots: vec![],

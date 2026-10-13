@@ -7,6 +7,12 @@
 mod native {
     use std::ffi::{c_char, c_void};
     unsafe extern "C" {
+        #[cfg(test)]
+        pub fn kr_output_test_bundled_syphon_path(
+            executable: *const c_char,
+            output: *mut c_char,
+            capacity: usize,
+        ) -> i32;
         pub fn kr_output_syphon_detected() -> i32;
         pub fn kr_output_decklink_detected() -> i32;
         pub fn kr_output_ndi_detected() -> i32;
@@ -255,3 +261,61 @@ mod imp {
 
 #[cfg(target_os = "macos")]
 pub use imp::{SyphonServer, publish_texture};
+
+#[cfg(all(test, target_os = "macos"))]
+mod bundle_tests {
+    use super::native;
+    use std::ffi::{CStr, CString};
+
+    #[test]
+    fn syphon_bundle_layout_is_explicit_and_cli_does_not_trigger_bundle_discovery() {
+        for (executable, expected) in [
+            (
+                "/Applications/Kronello.app/Contents/MacOS/Kronello",
+                Some("/Applications/Kronello.app/Contents/Frameworks/Syphon.framework/Syphon"),
+            ),
+            (
+                "/tmp/Kronello Beta.app/Contents/MacOS/kronello",
+                Some("/tmp/Kronello Beta.app/Contents/Frameworks/Syphon.framework/Syphon"),
+            ),
+            ("/tmp/target/debug/deps/output-test", None),
+            ("/tmp/not-app/Contents/MacOS/kronello", None),
+            (
+                "/tmp/Kronello.app/Contents/Helpers/kronello",
+                Some("/tmp/Kronello.app/Contents/Frameworks/Syphon.framework/Syphon"),
+            ),
+            ("/tmp/Kronello.app/Contents/Resources/kronello", None),
+        ] {
+            let executable = CString::new(executable).unwrap();
+            let mut buffer = [0_i8; 1024];
+            // SAFETY: live NUL-terminated input and writable sized output;
+            // the native helper only resolves the layout, never loads files.
+            let result = unsafe {
+                native::kr_output_test_bundled_syphon_path(
+                    executable.as_ptr(),
+                    buffer.as_mut_ptr(),
+                    buffer.len(),
+                )
+            };
+            assert_eq!(result, i32::from(expected.is_some()));
+            if let Some(expected) = expected {
+                // SAFETY: successful native result wrote a bounded NUL string.
+                assert_eq!(
+                    unsafe { CStr::from_ptr(buffer.as_ptr()) }.to_str().unwrap(),
+                    expected
+                );
+                // SAFETY: same live input with a buffer too small for its path.
+                assert_eq!(
+                    unsafe {
+                        native::kr_output_test_bundled_syphon_path(
+                            executable.as_ptr(),
+                            buffer.as_mut_ptr(),
+                            1,
+                        )
+                    },
+                    -1
+                );
+            }
+        }
+    }
+}

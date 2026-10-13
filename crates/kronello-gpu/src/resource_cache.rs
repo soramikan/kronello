@@ -248,6 +248,11 @@ impl GpuContext {
         cache.entries.clear();
         cache.stats.textures.bytes = 0;
         cache.stats.textures.entries = 0;
+        drop(cache);
+        self.readback_pool
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear_idle();
         Ok(())
     }
     pub fn cache_stats(&self) -> GpuCacheStats {
@@ -434,6 +439,7 @@ impl GpuContext {
         if payload_bytes + 112 > config.capacity.bytes {
             return Ok(());
         }
+        let _measure = kronello_render::measure_execution_stage("gpu_disk_cache_persistence");
         std::fs::create_dir_all(&config.directory).map_err(|e| GpuError::CacheIo(e.to_string()))?;
         let path = config.directory.join(filename(key));
         let payload = self.read_texture(surface.texture(), 8, stats)?;

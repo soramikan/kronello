@@ -1,5 +1,9 @@
 //! Immutable scene compilation and image-sequence export. Concrete execution
 //! is injected through RenderBackend; this crate imports no GPU or store API.
+mod execution_diagnostics;
+mod export_session;
+pub use execution_diagnostics::*;
+pub use export_session::ExportRenderSession;
 mod hdr;
 pub use hdr::*;
 mod bounds;
@@ -11,7 +15,9 @@ pub use surface::*;
 mod effect;
 mod inspect;
 pub use inspect::*;
+mod frame_manifest;
 mod output;
+pub use frame_manifest::*;
 mod temporal;
 pub use temporal::*;
 mod scopes;

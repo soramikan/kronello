@@ -94,7 +94,7 @@
 | [0076](0076-buffered-device-clock-playback.md) | lock-free buffer と音声デバイス時計による再生 | 部分置換（0151 / 0155） | 2026-10-05 |
 | [0077](0077-template-instance-read-only-inspection.md) | テンプレート内部の評価値を停止時の読み取り検査として表示する | 採用 | 2026-10-05 |
 | [0078](0078-template-export-pages-and-inspected-snapshot.md) | テンプレート比較と検査した revision の書き出し | 採用 | 2026-10-05 |
-| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算 / 0148: 音声単独metadata / 0152: 二組pipeline） | 2026-10-06 |
+| [0079](0079-bounded-streaming-movie-export.md) | movie export の payload を有界 streaming で処理する | 部分置換（0141: tile面計算 / 0148: 音声単独metadata / 0152: 二組pipeline / 0163: 音声共有） | 2026-10-06 |
 | [0080](0080-root-temporal-integration.md) | root scope の有理数露光積分と temporal cache | 採用 | 2026-10-06 |
 | [0081](0081-guaranteed-metal-hardware-video-decode.md) | Metal / VideoToolbox の明示 GPU 常駐デコード | 部分置換（ADR-0156） | 2026-10-06 |
 | [0082](0082-windows-ffmpeg-runtime.md) | Windows の FFmpeg runtime と実 worker の検証 | 採用 | 2026-10-06 |
@@ -164,18 +164,18 @@
 
 | [0143](0143-deadline-driven-native-notifications.md) | native の外部状態確認を描画頻度から分離する | 採用 | 2026-10-11 |
 
-| [0144](0144-revision-scoped-preview-preparation.md) | revision単位の検証済みプレビュー準備 | 部分置換（0147） | 2026-10-11 |
+| [0144](0144-revision-scoped-preview-preparation.md) | revision単位の検証済みプレビュー準備 | 部分置換（0147 / 0159） | 2026-10-11 |
 
 | [0145](0145-invalid-document-diagnostics-and-css-easing.md) | 既知不正文書の診断と CSS 時間イージング | 採用 | 2026-10-11 |
 
-| [0146](0146-independent-bounded-media-cursors.md) | 独立した動画カーソルと二つの保持予算 | 採用 | 2026-10-11 |
+| [0146](0146-independent-bounded-media-cursors.md) | 独立した動画カーソルと二つの保持予算 | 部分置換（0160） | 2026-10-11 |
 
 | [0147](0147-indexed-timeline-and-proxy-preparation.md) | タイムラインの派生索引とproxy準備再利用 | 採用 | 2026-10-11 |
 | [0148](0148-audio-only-delivery-without-video.md) | 音声単独出力の映像処理省略 | 採用 | 2026-10-11 |
 | [0149](0149-codec-parallelism-and-packet-spans.md) | Codec別並列度と遅延packetのspan | 採用 | 2026-10-11 |
-| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 採用 | 2026-10-11 |
+| [0150](0150-linear-only-delivery-and-temporal-samples.md) | 書き出しとshutter sampleのlinear専用境界 | 部分置換（0159 / 0164） | 2026-10-11 |
 | [0151](0151-bounded-playback-pcm-sharing.md) | 再生準備の有界PCM共有 | 部分置換（0155） | 2026-10-11 |
-| [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 採用 | 2026-10-11 |
+| [0152](0152-two-frame-delivery-pipeline.md) | 二組のframeでrenderとencodeを重ねる | 部分置換（0162） | 2026-10-11 |
 | [0153](0153-expected-hash-verification-memo.md) | 資産検証メモを期待hashへ結び付ける | 採用 | 2026-10-11 |
 
 | [0154](0154-verified-sparse-presentation-seek.md) | 検証済み提示区間による有界の疎なシーク索引 | 採用（PERF-005受け入れ済み） | 2026-10-11 |
@@ -183,6 +183,21 @@
 | [0155](0155-exact-bounded-audio-checkpoints.md) | 再検証済みsourceへの正確な有界音声チェックポイント | 採用（PERF-005受け入れ済み） | 2026-10-11 |
 | [0156](0156-bounded-persistent-hardware-cursor.md) | 有界圧縮demuxと永続hardware cursor | 採用 | 2026-10-11 |
 | [0157](0157-local-coverage-and-last-consumer-surfaces.md) | 保守的な局所coverage面と最終consumerでの解放 | 採用 | 2026-10-11 |
+
+| [0158](0158-scoped-export-execution-measurements.md) | 固定workerの有界な工程観測 | 採用（PERF-006受け入れ進行中） | 2026-10-12 |
+
+| [0159](0159-prepared-export-and-bounded-sample-scenes.md) | 書き出し準備と有界sample SceneIR共有 | 採用（PERF-007受け入れ済み） | 2026-10-12 |
+
+| [0160](0160-shared-presentations-and-converted-source-cache.md) | 不変presentation共有と変換前source cache | 採用（PERF-008受け入れ済み） | 2026-10-12 |
+
+| [0161](0161-time-based-worker-progress-and-control-gates.md) | worker制御確認と時間駆動の進捗保存 | 採用（PERF-009受け入れ済み） | 2026-10-12 |
+| [0162](0162-direct-color-and-shared-video-delivery.md) | 直接色変換と同条件の動画delivery共有 | 採用（PERF-010受け入れ済み） | 2026-10-12 |
+| [0163](0163-shared-export-audio-and-verified-spools.md) | 書き出し音声mix共有と検証済みspoolの任意再利用 | 採用（PERF-011受け入れ済み） | 2026-10-12 |
+| [0164](0164-unified-linear-readback-and-bounded-staging.md) | linear status/画像の待機統合と有界staging | 採用（PERF-012受け入れ済み） | 2026-10-12 |
+| [0165](0165-bounded-export-metadata-and-receipts.md) | 長尺frame metadataとpublication receiptの有界化 | 部分置換（0166: image sequence / 0168: publication roots） | 2026-10-12 |
+| [0166](0166-bounded-sequence-metadata.md) | 画像連番のmetadataと画素参照を有界manifestへ保存する | 採用（PERF-013受け入れ済み） | 2026-10-13 |
+| [0167](0167-experimental-export-delivery.md) | GPU encoder surfaceと直接packet muxの試作境界・既定採用の保留 | 採用 | 2026-10-13 |
+| [0168](0168-publication-root-compatibility.md) | publication root数の互換性と旧attempt sidecar回収 | 採用 | 2026-10-13 |
 
 ## 追加と変更の規則
 

@@ -7,6 +7,13 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+export-prototypes = []
+
+[[example]]
+name = "perf_packet_mux"
+required-features = ["export-prototypes"]
+
 # Mirror workspace lints; unsafe is confined to the audited ffi module.
 [lints.rust]
 unsafe_code = "allow"

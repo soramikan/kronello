@@ -119,6 +119,7 @@ macro_rules! commands {
             ("render.export", true, RenderSubmitRequest, kronello_media::AvExportReport),
             ("render.submit", true, RenderSubmitRequest, kronello_jobs::JobRecord),
             ("job.get", true, JobRequest, kronello_jobs::JobRecord),
+            ("job.frames", true, JobFramesRequest, JobFramesResult),
             ("job.list", true, JobListRequest, JobListResult),
             ("job.cancel", true, JobRequest, kronello_jobs::JobRecord),
             ("job.resume", true, JobRequest, kronello_jobs::JobRecord),

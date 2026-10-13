@@ -1,0 +1,2763 @@
+{
+  "schema_version": 1,
+  "trials": [
+    {
+      "mode": "before",
+      "binary_sha256": "c7e639b65cec202c56726f5dabf6ba0d8a50e5899d17f11d245dcb8b49518aa1",
+      "case_sha256": "d2473d1bcb91ab738506912c72b9d83630e3092a22c685eb6714ec3d3b45082f",
+      "action": "cancel",
+      "observed_work": {
+        "marker": "audio spool growing",
+        "bytes": 425984
+      },
+      "signal_api_ms": 8.661540996399708,
+      "signal_to_worker_exit_ms": 24.243749998277053,
+      "terminal_status": "canceled",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": {
+        "attempt": 0,
+        "job": "a7727be6-41e8-4fc6-bdc2-7f4dca2e3fa1",
+        "job_store": {
+          "committed_write_transactions": 43,
+          "completed_checkpoints": 37,
+          "completed_heartbeats": 4
+        },
+        "pid": 87740,
+        "schema_version": 1,
+        "succeeded": false,
+        "worker": {
+          "counts": {
+            "audio_source_decodes": 1,
+            "audio_spool_chunks": 36,
+            "checkpoint_callbacks": 38,
+            "worker_checkpoint_calls": 38
+          },
+          "peak_payload_bytes": {
+            "audio_decode_chunk": 32768,
+            "audio_spool_write_buffer": 32768
+          },
+          "schema_version": 1,
+          "stages": {
+            "audio_decode_spool": {
+              "calls": 1,
+              "elapsed_us": 247768,
+              "first_samples_us": [
+                247768
+              ]
+            },
+            "checkpoint_callback": {
+              "calls": 38,
+              "elapsed_us": 19159,
+              "first_samples_us": [
+                576,
+                531,
+                588,
+                366,
+                637,
+                432,
+                698,
+                400,
+                534,
+                334,
+                567,
+                434,
+                541,
+                392,
+                637,
+                548,
+                451,
+                500,
+                316,
+                377,
+                488,
+                350,
+                674,
+                370,
+                489,
+                369,
+                479,
+                323,
+                536,
+                351,
+                334,
+                468,
+                416,
+                541,
+                389,
+                537,
+                267,
+                1900
+              ]
+            },
+            "fixed_input_validation": {
+              "calls": 1,
+              "elapsed_us": 236026,
+              "first_samples_us": [
+                236026
+              ]
+            },
+            "locked_fonts_staging_preparation": {
+              "calls": 1,
+              "elapsed_us": 9935,
+              "first_samples_us": [
+                9935
+              ]
+            },
+            "preparation": {
+              "calls": 1,
+              "elapsed_us": 1599,
+              "first_samples_us": [
+                1599
+              ]
+            },
+            "snapshot_canonical_hash": {
+              "calls": 3,
+              "elapsed_us": 144,
+              "first_samples_us": [
+                65,
+                48,
+                30
+              ]
+            },
+            "snapshot_validation": {
+              "calls": 4,
+              "elapsed_us": 176,
+              "first_samples_us": [
+                88,
+                22,
+                31,
+                32
+              ]
+            },
+            "worker_checkpoint": {
+              "calls": 38,
+              "elapsed_us": 19143,
+              "first_samples_us": [
+                575,
+                528,
+                588,
+                366,
+                637,
+                432,
+                698,
+                400,
+                533,
+                334,
+                567,
+                434,
+                541,
+                391,
+                637,
+                548,
+                450,
+                499,
+                316,
+                377,
+                488,
+                349,
+                673,
+                369,
+                489,
+                368,
+                478,
+                323,
+                536,
+                351,
+                334,
+                468,
+                416,
+                541,
+                388,
+                537,
+                267,
+                1900
+              ]
+            },
+            "worker_execute_fixed": {
+              "calls": 1,
+              "elapsed_us": 517773,
+              "first_samples_us": [
+                517773
+              ]
+            },
+            "worker_fixed_input_read": {
+              "calls": 1,
+              "elapsed_us": 1130,
+              "first_samples_us": [
+                1130
+              ]
+            },
+            "worker_slot_wait": {
+              "calls": 1,
+              "elapsed_us": 602,
+              "first_samples_us": [
+                602
+              ]
+            }
+          },
+          "wall_us": 520997
+        }
+      },
+      "resumed": null
+    },
+    {
+      "mode": "after",
+      "binary_sha256": "49df8a6d1cb6c44e305c0814e2128d8850d4261b461e0aa5662983f95632afed",
+      "case_sha256": "d2473d1bcb91ab738506912c72b9d83630e3092a22c685eb6714ec3d3b45082f",
+      "action": "cancel",
+      "observed_work": {
+        "marker": "audio spool growing",
+        "bytes": 15073280
+      },
+      "signal_api_ms": 14.357041989569552,
+      "signal_to_worker_exit_ms": 53.342749990406446,
+      "terminal_status": "canceled",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": {
+        "attempt": 0,
+        "job": "56b1a5ba-368a-4cca-9e43-c1c4719dfcf1",
+        "job_store": {
+          "committed_write_transactions": 7,
+          "completed_checkpoints": 0,
+          "completed_heartbeats": 5
+        },
+        "pid": 87755,
+        "schema_version": 1,
+        "succeeded": false,
+        "worker": {
+          "counts": {
+            "audio_source_decodes": 1,
+            "audio_spool_chunks": 1929,
+            "checkpoint_callbacks": 1931,
+            "worker_checkpoint_calls": 1931,
+            "worker_control_checks": 3,
+            "worker_progress_writes": 0
+          },
+          "peak_payload_bytes": {
+            "audio_decode_chunk": 32768,
+            "audio_spool_write_buffer": 32768
+          },
+          "schema_version": 1,
+          "stages": {
+            "audio_decode_spool": {
+              "calls": 1,
+              "elapsed_us": 282095,
+              "first_samples_us": [
+                282095
+              ]
+            },
+            "checkpoint_callback": {
+              "calls": 1931,
+              "elapsed_us": 2082,
+              "first_samples_us": [
+                430,
+                390,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "fixed_input_validation": {
+              "calls": 1,
+              "elapsed_us": 235995,
+              "first_samples_us": [
+                235995
+              ]
+            },
+            "locked_fonts_staging_preparation": {
+              "calls": 1,
+              "elapsed_us": 9992,
+              "first_samples_us": [
+                9992
+              ]
+            },
+            "preparation": {
+              "calls": 1,
+              "elapsed_us": 688,
+              "first_samples_us": [
+                688
+              ]
+            },
+            "snapshot_canonical_hash": {
+              "calls": 3,
+              "elapsed_us": 149,
+              "first_samples_us": [
+                73,
+                46,
+                29
+              ]
+            },
+            "snapshot_validation": {
+              "calls": 4,
+              "elapsed_us": 173,
+              "first_samples_us": [
+                95,
+                20,
+                34,
+                22
+              ]
+            },
+            "worker_checkpoint": {
+              "calls": 1931,
+              "elapsed_us": 1853,
+              "first_samples_us": [
+                429,
+                389,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "worker_control_max_gap": {
+              "calls": 1,
+              "elapsed_us": 230022,
+              "first_samples_us": [
+                230022
+              ]
+            },
+            "worker_execute_fixed": {
+              "calls": 1,
+              "elapsed_us": 551152,
+              "first_samples_us": [
+                551152
+              ]
+            },
+            "worker_fixed_input_read": {
+              "calls": 1,
+              "elapsed_us": 610,
+              "first_samples_us": [
+                610
+              ]
+            },
+            "worker_slot_wait": {
+              "calls": 1,
+              "elapsed_us": 770,
+              "first_samples_us": [
+                770
+              ]
+            }
+          },
+          "wall_us": 554144
+        }
+      },
+      "resumed": null
+    },
+    {
+      "mode": "before",
+      "binary_sha256": "c7e639b65cec202c56726f5dabf6ba0d8a50e5899d17f11d245dcb8b49518aa1",
+      "case_sha256": "e7b449d8e1e355aeb35a2a53ce7fdd3bc1038405baea53201aa1967452399161",
+      "action": "cancel",
+      "observed_work": {
+        "marker": "first video source converted"
+      },
+      "signal_api_ms": 9.503458000835963,
+      "signal_to_worker_exit_ms": 12267.627624998568,
+      "terminal_status": "canceled",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": {
+        "attempt": 0,
+        "job": "9e045843-ab58-4242-a165-c2192efeeb6f",
+        "job_store": {
+          "committed_write_transactions": 120,
+          "completed_checkpoints": 3,
+          "completed_heartbeats": 115
+        },
+        "pid": 89422,
+        "schema_version": 1,
+        "succeeded": false,
+        "worker": {
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "export_sample_scene_hits": 312,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 240,
+            "native_rgba_to_yuv": 1,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 318,
+            "source_frame_cache_misses": 2,
+            "source_rgba8_bytes": 66355200,
+            "source_rgba8_conversions": 2,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 1,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 66361380,
+            "export_prepared_snapshot": 3588,
+            "export_sample_scenes": 12358,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "schema_version": 1,
+          "stages": {
+            "audio_encode": {
+              "calls": 1,
+              "elapsed_us": 11,
+              "first_samples_us": [
+                11
+              ]
+            },
+            "audio_flush": {
+              "calls": 1,
+              "elapsed_us": 70,
+              "first_samples_us": [
+                70
+              ]
+            },
+            "audio_mix": {
+              "calls": 1,
+              "elapsed_us": 4,
+              "first_samples_us": [
+                4
+              ]
+            },
+            "audio_plan_encoder_open": {
+              "calls": 1,
+              "elapsed_us": 122,
+              "first_samples_us": [
+                122
+              ]
+            },
+            "audio_quantize": {
+              "calls": 1,
+              "elapsed_us": 2,
+              "first_samples_us": [
+                2
+              ]
+            },
+            "backend_dag_lowering_host": {
+              "calls": 320,
+              "elapsed_us": 125753,
+              "first_samples_us": [
+                611,
+                423,
+                428,
+                416,
+                441,
+                462,
+                411,
+                414,
+                431,
+                536,
+                427,
+                421,
+                434,
+                418,
+                419,
+                478,
+                539,
+                429,
+                433,
+                444,
+                430,
+                509,
+                455,
+                415,
+                476,
+                466,
+                468,
+                488,
+                484,
+                467,
+                467,
+                469,
+                470,
+                456,
+                450,
+                425,
+                483,
+                462,
+                442,
+                508,
+                485,
+                452,
+                487,
+                462,
+                462,
+                471,
+                455,
+                454,
+                486,
+                462,
+                482,
+                480,
+                487,
+                626,
+                1726,
+                464,
+                240,
+                249,
+                222,
+                209,
+                266,
+                232,
+                236,
+                217
+              ]
+            },
+            "backend_linear_execution": {
+              "calls": 320,
+              "elapsed_us": 9188349,
+              "first_samples_us": [
+                38139,
+                29031,
+                28748,
+                28939,
+                28877,
+                29045,
+                29393,
+                29038,
+                32049,
+                30741,
+                28337,
+                29225,
+                29760,
+                30271,
+                29186,
+                30689,
+                30586,
+                29417,
+                29966,
+                27936,
+                29144,
+                29561,
+                28966,
+                29399,
+                34606,
+                30270,
+                32575,
+                35145,
+                34890,
+                31563,
+                29939,
+                29881,
+                30140,
+                30714,
+                29521,
+                28844,
+                30967,
+                30744,
+                32645,
+                28197,
+                30209,
+                31213,
+                29022,
+                28661,
+                31689,
+                30141,
+                28901,
+                30290,
+                29052,
+                34176,
+                31067,
+                31552,
+                33463,
+                65934,
+                41727,
+                30825,
+                21790,
+                22721,
+                25350,
+                24037,
+                23141,
+                21533,
+                24266,
+                26876
+              ]
+            },
+            "checkpoint_callback": {
+              "calls": 4,
+              "elapsed_us": 1893,
+              "first_samples_us": [
+                534,
+                485,
+                461,
+                411
+              ]
+            },
+            "dag_media_resolution": {
+              "calls": 320,
+              "elapsed_us": 2621623,
+              "first_samples_us": [
+                61222,
+                5546,
+                5599,
+                5392,
+                8631,
+                5401,
+                5526,
+                5397,
+                25125,
+                5678,
+                6061,
+                5855,
+                6475,
+                5828,
+                5845,
+                5993,
+                26634,
+                5723,
+                5733,
+                5913,
+                6544,
+                5946,
+                6166,
+                6076,
+                26186,
+                6049,
+                6032,
+                6274,
+                6736,
+                5784,
+                5864,
+                5847,
+                27327,
+                5794,
+                5771,
+                5698,
+                6438,
+                5823,
+                5755,
+                5863,
+                27699,
+                6161,
+                5990,
+                5998,
+                6643,
+                5860,
+                5903,
+                6129,
+                27534,
+                6376,
+                6452,
+                6407,
+                7395,
+                7007,
+                9017,
+                6227,
+                25180,
+                3014,
+                2917,
+                3029,
+                3730,
+                2991,
+                3040,
+                2808
+              ]
+            },
+            "fixed_input_validation": {
+              "calls": 1,
+              "elapsed_us": 25306,
+              "first_samples_us": [
+                25306
+              ]
+            },
+            "gpu_command_submit_host": {
+              "calls": 1280,
+              "elapsed_us": 33937,
+              "first_samples_us": [
+                676,
+                208,
+                113,
+                107,
+                37,
+                50,
+                16,
+                13,
+                34,
+                48,
+                15,
+                11,
+                31,
+                49,
+                14,
+                15,
+                45,
+                46,
+                14,
+                12,
+                39,
+                50,
+                13,
+                10,
+                35,
+                40,
+                11,
+                10,
+                32,
+                51,
+                14,
+                12,
+                43,
+                37,
+                14,
+                13,
+                36,
+                37,
+                14,
+                11,
+                38,
+                34,
+                12,
+                9,
+                33,
+                37,
+                14,
+                10,
+                45,
+                53,
+                15,
+                14,
+                34,
+                49,
+                15,
+                12,
+                33,
+                50,
+                14,
+                13,
+                29,
+                49,
+                13,
+                10
+              ]
+            },
+            "gpu_completion_wait": {
+              "calls": 1280,
+              "elapsed_us": 789631,
+              "first_samples_us": [
+                3357,
+                276,
+                893,
+                658,
+                1122,
+                307,
+                940,
+                668,
+                961,
+                587,
+                1150,
+                567,
+                1137,
+                344,
+                1011,
+                600,
+                703,
+                309,
+                996,
+                974,
+                725,
+                498,
+                925,
+                1042,
+                1037,
+                753,
+                1027,
+                928,
+                861,
+                552,
+                922,
+                771,
+                1309,
+                813,
+                749,
+                972,
+                756,
+                548,
+                998,
+                1069,
+                1073,
+                284,
+                654,
+                1028,
+                941,
+                492,
+                934,
+                616,
+                1081,
+                781,
+                1006,
+                577,
+                926,
+                617,
+                953,
+                960,
+                794,
+                552,
+                1016,
+                944,
+                721,
+                623,
+                640,
+                942
+              ]
+            },
+            "gpu_disk_cache_persistence": {
+              "calls": 640,
+              "elapsed_us": 7581484,
+              "first_samples_us": [
+                13261,
+                12103,
+                11954,
+                11777,
+                11589,
+                12058,
+                11562,
+                12103,
+                11754,
+                11812,
+                11631,
+                11985,
+                11991,
+                11896,
+                11563,
+                12175,
+                13434,
+                12565,
+                12125,
+                12824,
+                10559,
+                12052,
+                11796,
+                12046,
+                12338,
+                11905,
+                12166,
+                12319,
+                11768,
+                12012,
+                12158,
+                12909,
+                12327,
+                12096,
+                12251,
+                11803,
+                11833,
+                12921,
+                11802,
+                10901,
+                11641,
+                11967,
+                11943,
+                12107,
+                12522,
+                10984,
+                11522,
+                12827,
+                14895,
+                14125,
+                12296,
+                12644,
+                13262,
+                13856,
+                15849,
+                13830,
+                13798,
+                15668,
+                13432,
+                12941,
+                11872,
+                12852,
+                11746,
+                12941
+              ]
+            },
+            "gpu_scene_preparation_host": {
+              "calls": 320,
+              "elapsed_us": 124468,
+              "first_samples_us": [
+                3891,
+                378,
+                394,
+                384,
+                397,
+                387,
+                413,
+                369,
+                420,
+                451,
+                386,
+                381,
+                406,
+                392,
+                383,
+                431,
+                519,
+                395,
+                387,
+                394,
+                399,
+                394,
+                394,
+                373,
+                450,
+                426,
+                418,
+                482,
+                466,
+                429,
+                420,
+                425,
+                452,
+                407,
+                432,
+                381,
+                428,
+                415,
+                380,
+                442,
+                464,
+                434,
+                431,
+                426,
+                432,
+                400,
+                424,
+                407,
+                626,
+                395,
+                458,
+                444,
+                469,
+                471,
+                845,
+                427,
+                282,
+                220,
+                204,
+                231,
+                318,
+                242,
+                242,
+                204
+              ]
+            },
+            "intermediate_validation": {
+              "calls": 1,
+              "elapsed_us": 571,
+              "first_samples_us": [
+                571
+              ]
+            },
+            "locked_fonts_staging_preparation": {
+              "calls": 1,
+              "elapsed_us": 5768,
+              "first_samples_us": [
+                5768
+              ]
+            },
+            "mux_container_validation": {
+              "calls": 1,
+              "elapsed_us": 1133,
+              "first_samples_us": [
+                1133
+              ]
+            },
+            "native_codec_receive": {
+              "calls": 2,
+              "elapsed_us": 0,
+              "first_samples_us": [
+                0,
+                0
+              ]
+            },
+            "native_codec_send": {
+              "calls": 2,
+              "elapsed_us": 231133,
+              "first_samples_us": [
+                8,
+                231125
+              ]
+            },
+            "native_packet_write": {
+              "calls": 1,
+              "elapsed_us": 153,
+              "first_samples_us": [
+                153
+              ]
+            },
+            "native_rgba_to_yuv": {
+              "calls": 1,
+              "elapsed_us": 14881,
+              "first_samples_us": [
+                14881
+              ]
+            },
+            "native_trailer_close": {
+              "calls": 1,
+              "elapsed_us": 92,
+              "first_samples_us": [
+                92
+              ]
+            },
+            "native_video_conversion_encode": {
+              "calls": 1,
+              "elapsed_us": 14896,
+              "first_samples_us": [
+                14896
+              ]
+            },
+            "output_color_conversion_copy": {
+              "calls": 40,
+              "elapsed_us": 62529,
+              "first_samples_us": [
+                1817,
+                1610,
+                1905,
+                2028,
+                1611,
+                2232,
+                1830,
+                876,
+                1941,
+                1707,
+                1969,
+                2131,
+                1648,
+                2207,
+                1860,
+                853,
+                1944,
+                1663,
+                2024,
+                2161,
+                2422,
+                2495,
+                2147,
+                993,
+                1907,
+                1712,
+                1929,
+                2088,
+                1900,
+                2646,
+                2102,
+                942,
+                462,
+                445,
+                413,
+                452,
+                352,
+                484,
+                414,
+                188
+              ]
+            },
+            "pipeline_buffer_acquire": {
+              "calls": 2,
+              "elapsed_us": 0,
+              "first_samples_us": [
+                0,
+                0
+              ]
+            },
+            "pipeline_consumer_input_wait": {
+              "calls": 2,
+              "elapsed_us": 12061918,
+              "first_samples_us": [
+                12061918,
+                0
+              ]
+            },
+            "pipeline_encoder_initialization_wait": {
+              "calls": 1,
+              "elapsed_us": 601,
+              "first_samples_us": [
+                601
+              ]
+            },
+            "pipeline_submit_wait": {
+              "calls": 2,
+              "elapsed_us": 8,
+              "first_samples_us": [
+                2,
+                6
+              ]
+            },
+            "preparation": {
+              "calls": 1,
+              "elapsed_us": 743,
+              "first_samples_us": [
+                743
+              ]
+            },
+            "render_dag_build": {
+              "calls": 320,
+              "elapsed_us": 2813,
+              "first_samples_us": [
+                6,
+                5,
+                6,
+                5,
+                5,
+                5,
+                6,
+                5,
+                6,
+                7,
+                7,
+                8,
+                7,
+                8,
+                7,
+                8,
+                10,
+                8,
+                7,
+                7,
+                7,
+                7,
+                7,
+                7,
+                8,
+                8,
+                8,
+                8,
+                9,
+                8,
+                8,
+                8,
+                8,
+                8,
+                9,
+                7,
+                8,
+                9,
+                7,
+                8,
+                6,
+                9,
+                8,
+                7,
+                8,
+                7,
+                9,
+                8,
+                8,
+                7,
+                9,
+                8,
+                9,
+                10,
+                13,
+                8,
+                8,
+                8,
+                7,
+                8,
+                7,
+                9,
+                8,
+                8
+              ]
+            },
+            "render_tiles_and_conversion": {
+              "calls": 1,
+              "elapsed_us": 12061444,
+              "first_samples_us": [
+                12061444
+              ]
+            },
+            "scene_ir_evaluation": {
+              "calls": 9,
+              "elapsed_us": 1205,
+              "first_samples_us": [
+                168,
+                90,
+                132,
+                134,
+                123,
+                135,
+                134,
+                146,
+                138
+              ]
+            },
+            "snapshot_canonical_hash": {
+              "calls": 4,
+              "elapsed_us": 141,
+              "first_samples_us": [
+                54,
+                37,
+                26,
+                22
+              ]
+            },
+            "snapshot_evaluation_hash": {
+              "calls": 1,
+              "elapsed_us": 18,
+              "first_samples_us": [
+                18
+              ]
+            },
+            "snapshot_validation": {
+              "calls": 5,
+              "elapsed_us": 195,
+              "first_samples_us": [
+                90,
+                22,
+                39,
+                23,
+                20
+              ]
+            },
+            "source_rgba8_conversion": {
+              "calls": 2,
+              "elapsed_us": 5435,
+              "first_samples_us": [
+                3000,
+                2434
+              ]
+            },
+            "static_sequence_preparation": {
+              "calls": 1,
+              "elapsed_us": 4,
+              "first_samples_us": [
+                4
+              ]
+            },
+            "video_decode_prepare": {
+              "calls": 320,
+              "elapsed_us": 1001375,
+              "first_samples_us": [
+                26328,
+                43,
+                43,
+                42,
+                651,
+                39,
+                42,
+                36,
+                19210,
+                43,
+                36,
+                38,
+                644,
+                42,
+                38,
+                39,
+                19831,
+                35,
+                34,
+                32,
+                653,
+                34,
+                36,
+                35,
+                20159,
+                43,
+                41,
+                49,
+                696,
+                40,
+                38,
+                43,
+                20423,
+                44,
+                35,
+                33,
+                677,
+                37,
+                39,
+                38,
+                21533,
+                53,
+                41,
+                37,
+                665,
+                38,
+                43,
+                39,
+                21086,
+                41,
+                49,
+                49,
+                723,
+                53,
+                112,
+                38,
+                22058,
+                42,
+                49,
+                47,
+                678,
+                42,
+                39,
+                35
+              ]
+            },
+            "video_encoder_flush": {
+              "calls": 1,
+              "elapsed_us": 231376,
+              "first_samples_us": [
+                231376
+              ]
+            },
+            "worker_checkpoint": {
+              "calls": 4,
+              "elapsed_us": 1890,
+              "first_samples_us": [
+                533,
+                485,
+                460,
+                410
+              ]
+            },
+            "worker_execute_fixed": {
+              "calls": 1,
+              "elapsed_us": 12382902,
+              "first_samples_us": [
+                12382902
+              ]
+            },
+            "worker_fixed_input_read": {
+              "calls": 1,
+              "elapsed_us": 582,
+              "first_samples_us": [
+                582
+              ]
+            },
+            "worker_slot_wait": {
+              "calls": 1,
+              "elapsed_us": 769,
+              "first_samples_us": [
+                769
+              ]
+            }
+          },
+          "wall_us": 12385920
+        }
+      },
+      "resumed": null
+    },
+    {
+      "mode": "after",
+      "binary_sha256": "49df8a6d1cb6c44e305c0814e2128d8850d4261b461e0aa5662983f95632afed",
+      "case_sha256": "e7b449d8e1e355aeb35a2a53ce7fdd3bc1038405baea53201aa1967452399161",
+      "action": "cancel",
+      "observed_work": {
+        "marker": "first video source converted"
+      },
+      "signal_api_ms": 10.655958001734689,
+      "signal_to_worker_exit_ms": 12265.215457999147,
+      "terminal_status": "canceled",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": {
+        "attempt": 0,
+        "job": "c87fc4fe-4617-49ad-a828-d9335e031df0",
+        "job_store": {
+          "committed_write_transactions": 117,
+          "completed_checkpoints": 0,
+          "completed_heartbeats": 115
+        },
+        "pid": 90202,
+        "schema_version": 1,
+        "succeeded": false,
+        "worker": {
+          "counts": {
+            "audio_mix_blocks": 1,
+            "audio_mixed_frames": 2000,
+            "checkpoint_callbacks": 4,
+            "export_sample_scene_hits": 312,
+            "native_codec_receive": 3,
+            "native_codec_send": 2,
+            "native_frame_shared_hits": 240,
+            "native_rgba_to_yuv": 1,
+            "output_tile_conversions": 40,
+            "rendered_frames": 1,
+            "rendered_tiles": 40,
+            "source_frame_cache_hits": 318,
+            "source_frame_cache_misses": 2,
+            "source_rgba8_bytes": 66355200,
+            "source_rgba8_conversions": 2,
+            "source_sws_context_creations": 1,
+            "source_sws_context_reuses": 1,
+            "video_encoder_frames": 1,
+            "worker_checkpoint_calls": 4,
+            "worker_control_checks": 2,
+            "worker_progress_writes": 0
+          },
+          "peak_payload_bytes": {
+            "audio_quantized_block": 16000,
+            "converted_source_cache": 66361380,
+            "export_prepared_snapshot": 3588,
+            "export_sample_scenes": 12358,
+            "export_semantic_cache": 0,
+            "export_verified_font_bytes": 0,
+            "linear_tile": 4194304,
+            "source_rgba8_buffer": 33177600,
+            "video_bundles": 66355200
+          },
+          "schema_version": 1,
+          "stages": {
+            "audio_encode": {
+              "calls": 1,
+              "elapsed_us": 14,
+              "first_samples_us": [
+                14
+              ]
+            },
+            "audio_flush": {
+              "calls": 1,
+              "elapsed_us": 97,
+              "first_samples_us": [
+                97
+              ]
+            },
+            "audio_mix": {
+              "calls": 1,
+              "elapsed_us": 3,
+              "first_samples_us": [
+                3
+              ]
+            },
+            "audio_plan_encoder_open": {
+              "calls": 1,
+              "elapsed_us": 187,
+              "first_samples_us": [
+                187
+              ]
+            },
+            "audio_quantize": {
+              "calls": 1,
+              "elapsed_us": 3,
+              "first_samples_us": [
+                3
+              ]
+            },
+            "backend_dag_lowering_host": {
+              "calls": 320,
+              "elapsed_us": 128204,
+              "first_samples_us": [
+                724,
+                518,
+                488,
+                482,
+                483,
+                468,
+                484,
+                465,
+                482,
+                483,
+                474,
+                472,
+                516,
+                473,
+                474,
+                487,
+                483,
+                497,
+                476,
+                480,
+                486,
+                503,
+                472,
+                477,
+                484,
+                487,
+                474,
+                537,
+                495,
+                485,
+                481,
+                461,
+                477,
+                462,
+                503,
+                467,
+                478,
+                820,
+                502,
+                455,
+                473,
+                469,
+                528,
+                611,
+                780,
+                730,
+                478,
+                901,
+                491,
+                713,
+                497,
+                480,
+                492,
+                537,
+                489,
+                481,
+                247,
+                240,
+                253,
+                228,
+                256,
+                289,
+                237,
+                237
+              ]
+            },
+            "backend_linear_execution": {
+              "calls": 320,
+              "elapsed_us": 8995543,
+              "first_samples_us": [
+                39156,
+                30757,
+                28628,
+                31735,
+                29300,
+                31337,
+                30281,
+                28372,
+                28789,
+                29875,
+                30235,
+                30890,
+                28861,
+                28767,
+                29717,
+                30001,
+                31147,
+                29861,
+                27849,
+                30037,
+                29145,
+                29748,
+                28688,
+                30029,
+                31471,
+                32028,
+                33391,
+                30269,
+                30049,
+                31442,
+                30346,
+                30965,
+                32088,
+                29776,
+                31834,
+                30385,
+                29308,
+                30043,
+                31226,
+                33337,
+                32151,
+                31203,
+                31619,
+                36188,
+                38154,
+                34564,
+                41069,
+                31788,
+                32118,
+                29821,
+                30421,
+                30284,
+                30201,
+                29776,
+                30858,
+                29838,
+                22335,
+                23219,
+                22545,
+                21656,
+                21419,
+                21326,
+                22698,
+                22274
+              ]
+            },
+            "checkpoint_callback": {
+              "calls": 4,
+              "elapsed_us": 872,
+              "first_samples_us": [
+                431,
+                0,
+                0,
+                440
+              ]
+            },
+            "dag_media_resolution": {
+              "calls": 320,
+              "elapsed_us": 2802052,
+              "first_samples_us": [
+                69799,
+                6220,
+                6139,
+                6203,
+                9815,
+                6136,
+                6123,
+                6126,
+                28386,
+                6384,
+                6279,
+                6361,
+                7408,
+                6612,
+                6666,
+                6634,
+                33818,
+                6411,
+                6449,
+                6415,
+                7305,
+                6622,
+                6613,
+                6654,
+                29121,
+                6069,
+                6091,
+                6424,
+                6979,
+                6158,
+                6023,
+                6158,
+                32403,
+                6446,
+                6683,
+                6053,
+                6864,
+                6233,
+                6087,
+                6164,
+                37844,
+                6112,
+                6655,
+                6912,
+                6853,
+                6602,
+                6573,
+                9857,
+                35877,
+                6327,
+                6465,
+                6362,
+                7181,
+                6493,
+                6517,
+                6334,
+                30588,
+                3355,
+                3145,
+                3237,
+                3878,
+                3224,
+                3231,
+                3440
+              ]
+            },
+            "fixed_input_validation": {
+              "calls": 1,
+              "elapsed_us": 27576,
+              "first_samples_us": [
+                27576
+              ]
+            },
+            "gpu_command_submit_host": {
+              "calls": 1280,
+              "elapsed_us": 35377,
+              "first_samples_us": [
+                623,
+                221,
+                107,
+                105,
+                63,
+                65,
+                27,
+                23,
+                63,
+                40,
+                51,
+                15,
+                53,
+                39,
+                17,
+                11,
+                57,
+                112,
+                20,
+                13,
+                51,
+                43,
+                28,
+                17,
+                48,
+                42,
+                15,
+                11,
+                54,
+                43,
+                17,
+                11,
+                56,
+                44,
+                16,
+                12,
+                56,
+                43,
+                16,
+                12,
+                56,
+                42,
+                14,
+                11,
+                67,
+                60,
+                15,
+                13,
+                50,
+                42,
+                16,
+                11,
+                60,
+                54,
+                14,
+                11,
+                56,
+                42,
+                16,
+                11,
+                48,
+                39,
+                14,
+                12
+              ]
+            },
+            "gpu_completion_wait": {
+              "calls": 1280,
+              "elapsed_us": 755792,
+              "first_samples_us": [
+                4108,
+                317,
+                643,
+                654,
+                680,
+                325,
+                649,
+                648,
+                773,
+                548,
+                550,
+                578,
+                827,
+                467,
+                762,
+                634,
+                682,
+                471,
+                578,
+                645,
+                620,
+                554,
+                611,
+                549,
+                811,
+                501,
+                661,
+                611,
+                841,
+                466,
+                657,
+                611,
+                855,
+                499,
+                608,
+                649,
+                818,
+                527,
+                656,
+                594,
+                788,
+                491,
+                641,
+                734,
+                1080,
+                583,
+                633,
+                678,
+                799,
+                488,
+                605,
+                667,
+                739,
+                530,
+                631,
+                662,
+                815,
+                532,
+                654,
+                631,
+                783,
+                517,
+                763,
+                672
+              ]
+            },
+            "gpu_disk_cache_persistence": {
+              "calls": 640,
+              "elapsed_us": 7363975,
+              "first_samples_us": [
+                13345,
+                11811,
+                12038,
+                13213,
+                10714,
+                12240,
+                13675,
+                12660,
+                11993,
+                11875,
+                12778,
+                13154,
+                11446,
+                13026,
+                12155,
+                10693,
+                12101,
+                10986,
+                12190,
+                12144,
+                12500,
+                12093,
+                12775,
+                12054,
+                11335,
+                11981,
+                11341,
+                11771,
+                12199,
+                11883,
+                12101,
+                12271,
+                12495,
+                12909,
+                11490,
+                12951,
+                11559,
+                10866,
+                12476,
+                11904,
+                11607,
+                12080,
+                12171,
+                11983,
+                12462,
+                10900,
+                11999,
+                12227,
+                12848,
+                12949,
+                12450,
+                13747,
+                12793,
+                15183,
+                12580,
+                12115,
+                12441,
+                11885,
+                12457,
+                13165,
+                11518,
+                13201,
+                13565,
+                11863
+              ]
+            },
+            "gpu_scene_preparation_host": {
+              "calls": 320,
+              "elapsed_us": 127634,
+              "first_samples_us": [
+                4049,
+                464,
+                488,
+                459,
+                465,
+                454,
+                450,
+                503,
+                478,
+                467,
+                467,
+                457,
+                455,
+                463,
+                470,
+                466,
+                468,
+                436,
+                453,
+                441,
+                446,
+                501,
+                444,
+                461,
+                471,
+                457,
+                463,
+                449,
+                473,
+                458,
+                465,
+                448,
+                458,
+                442,
+                442,
+                552,
+                458,
+                433,
+                429,
+                529,
+                462,
+                432,
+                611,
+                470,
+                741,
+                459,
+                464,
+                542,
+                504,
+                446,
+                452,
+                458,
+                449,
+                594,
+                432,
+                463,
+                292,
+                247,
+                233,
+                224,
+                262,
+                290,
+                234,
+                241
+              ]
+            },
+            "intermediate_validation": {
+              "calls": 1,
+              "elapsed_us": 561,
+              "first_samples_us": [
+                561
+              ]
+            },
+            "locked_fonts_staging_preparation": {
+              "calls": 1,
+              "elapsed_us": 10631,
+              "first_samples_us": [
+                10631
+              ]
+            },
+            "mux_container_validation": {
+              "calls": 1,
+              "elapsed_us": 1134,
+              "first_samples_us": [
+                1134
+              ]
+            },
+            "native_codec_receive": {
+              "calls": 2,
+              "elapsed_us": 1,
+              "first_samples_us": [
+                1,
+                0
+              ]
+            },
+            "native_codec_send": {
+              "calls": 2,
+              "elapsed_us": 236869,
+              "first_samples_us": [
+                6,
+                236863
+              ]
+            },
+            "native_packet_write": {
+              "calls": 1,
+              "elapsed_us": 169,
+              "first_samples_us": [
+                169
+              ]
+            },
+            "native_rgba_to_yuv": {
+              "calls": 1,
+              "elapsed_us": 14703,
+              "first_samples_us": [
+                14703
+              ]
+            },
+            "native_trailer_close": {
+              "calls": 1,
+              "elapsed_us": 123,
+              "first_samples_us": [
+                123
+              ]
+            },
+            "native_video_conversion_encode": {
+              "calls": 1,
+              "elapsed_us": 14716,
+              "first_samples_us": [
+                14716
+              ]
+            },
+            "output_color_conversion_copy": {
+              "calls": 40,
+              "elapsed_us": 65717,
+              "first_samples_us": [
+                1942,
+                1660,
+                1918,
+                2499,
+                1879,
+                2270,
+                1842,
+                861,
+                2014,
+                1888,
+                2185,
+                2149,
+                1685,
+                2234,
+                1852,
+                935,
+                2852,
+                2106,
+                1944,
+                2301,
+                1818,
+                2437,
+                2129,
+                906,
+                2235,
+                2124,
+                1967,
+                2254,
+                1907,
+                2639,
+                2119,
+                907,
+                416,
+                421,
+                456,
+                453,
+                367,
+                539,
+                403,
+                190
+              ]
+            },
+            "pipeline_buffer_acquire": {
+              "calls": 2,
+              "elapsed_us": 0,
+              "first_samples_us": [
+                0,
+                0
+              ]
+            },
+            "pipeline_consumer_input_wait": {
+              "calls": 2,
+              "elapsed_us": 12058099,
+              "first_samples_us": [
+                12058099,
+                0
+              ]
+            },
+            "pipeline_encoder_initialization_wait": {
+              "calls": 1,
+              "elapsed_us": 640,
+              "first_samples_us": [
+                640
+              ]
+            },
+            "pipeline_submit_wait": {
+              "calls": 2,
+              "elapsed_us": 5,
+              "first_samples_us": [
+                2,
+                3
+              ]
+            },
+            "preparation": {
+              "calls": 1,
+              "elapsed_us": 765,
+              "first_samples_us": [
+                765
+              ]
+            },
+            "render_dag_build": {
+              "calls": 320,
+              "elapsed_us": 2794,
+              "first_samples_us": [
+                7,
+                5,
+                6,
+                6,
+                5,
+                6,
+                5,
+                5,
+                8,
+                8,
+                8,
+                8,
+                12,
+                8,
+                8,
+                8,
+                8,
+                8,
+                8,
+                7,
+                8,
+                7,
+                7,
+                8,
+                9,
+                8,
+                9,
+                9,
+                10,
+                9,
+                9,
+                9,
+                8,
+                8,
+                8,
+                7,
+                7,
+                7,
+                8,
+                9,
+                8,
+                8,
+                8,
+                8,
+                9,
+                9,
+                8,
+                13,
+                9,
+                8,
+                8,
+                8,
+                8,
+                8,
+                8,
+                7,
+                8,
+                8,
+                7,
+                8,
+                8,
+                8,
+                8,
+                7
+              ]
+            },
+            "render_tiles_and_conversion": {
+              "calls": 1,
+              "elapsed_us": 12058089,
+              "first_samples_us": [
+                12058089
+              ]
+            },
+            "scene_ir_evaluation": {
+              "calls": 9,
+              "elapsed_us": 1284,
+              "first_samples_us": [
+                159,
+                88,
+                153,
+                148,
+                146,
+                152,
+                148,
+                144,
+                142
+              ]
+            },
+            "snapshot_canonical_hash": {
+              "calls": 4,
+              "elapsed_us": 173,
+              "first_samples_us": [
+                65,
+                42,
+                30,
+                33
+              ]
+            },
+            "snapshot_evaluation_hash": {
+              "calls": 1,
+              "elapsed_us": 23,
+              "first_samples_us": [
+                23
+              ]
+            },
+            "snapshot_validation": {
+              "calls": 5,
+              "elapsed_us": 205,
+              "first_samples_us": [
+                86,
+                20,
+                45,
+                23,
+                29
+              ]
+            },
+            "source_rgba8_conversion": {
+              "calls": 2,
+              "elapsed_us": 6679,
+              "first_samples_us": [
+                3669,
+                3010
+              ]
+            },
+            "static_sequence_preparation": {
+              "calls": 1,
+              "elapsed_us": 4,
+              "first_samples_us": [
+                4
+              ]
+            },
+            "video_decode_prepare": {
+              "calls": 320,
+              "elapsed_us": 1120492,
+              "first_samples_us": [
+                31624,
+                48,
+                68,
+                58,
+                719,
+                54,
+                58,
+                49,
+                21929,
+                61,
+                54,
+                57,
+                679,
+                50,
+                56,
+                48,
+                26811,
+                46,
+                41,
+                48,
+                657,
+                41,
+                44,
+                45,
+                22955,
+                40,
+                41,
+                44,
+                743,
+                119,
+                50,
+                46,
+                26125,
+                43,
+                53,
+                44,
+                617,
+                46,
+                42,
+                42,
+                31248,
+                43,
+                39,
+                76,
+                689,
+                58,
+                39,
+                94,
+                26897,
+                42,
+                43,
+                51,
+                757,
+                41,
+                40,
+                42,
+                26604,
+                41,
+                36,
+                37,
+                715,
+                37,
+                40,
+                36
+              ]
+            },
+            "video_encoder_flush": {
+              "calls": 1,
+              "elapsed_us": 237161,
+              "first_samples_us": [
+                237161
+              ]
+            },
+            "worker_checkpoint": {
+              "calls": 4,
+              "elapsed_us": 869,
+              "first_samples_us": [
+                430,
+                0,
+                0,
+                439
+              ]
+            },
+            "worker_control_max_gap": {
+              "calls": 1,
+              "elapsed_us": 12313750,
+              "first_samples_us": [
+                12313750
+              ]
+            },
+            "worker_execute_fixed": {
+              "calls": 1,
+              "elapsed_us": 12395456,
+              "first_samples_us": [
+                12395456
+              ]
+            },
+            "worker_fixed_input_read": {
+              "calls": 1,
+              "elapsed_us": 602,
+              "first_samples_us": [
+                602
+              ]
+            },
+            "worker_slot_wait": {
+              "calls": 1,
+              "elapsed_us": 618,
+              "first_samples_us": [
+                618
+              ]
+            }
+          },
+          "wall_us": 12398466
+        }
+      },
+      "resumed": null
+    },
+    {
+      "mode": "before",
+      "binary_sha256": "c7e639b65cec202c56726f5dabf6ba0d8a50e5899d17f11d245dcb8b49518aa1",
+      "case_sha256": "e7b449d8e1e355aeb35a2a53ce7fdd3bc1038405baea53201aa1967452399161",
+      "action": "lost-lease",
+      "observed_work": {
+        "marker": "first video source converted"
+      },
+      "signal_api_ms": 1.1991659994237125,
+      "signal_to_worker_exit_ms": 3028.6559160012985,
+      "terminal_status": "interrupted",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": null,
+      "resumed": {
+        "attempt": 1,
+        "status": "succeeded",
+        "render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+        "oracle": {
+          "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+          "encoded_bytes": 1395590,
+          "streams": [
+            {
+              "codec_type": "video",
+              "codec": "prores",
+              "pixel_format": "yuv422p10le",
+              "sample_rate": null,
+              "channels": null,
+              "channel_layout": null,
+              "decoded_sha256": "81538dec82a9a3505d6fe9eb39b8d662beb5c73a0d375449576cad3737ea8f36",
+              "decoded_bytes": 33177600,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "1/24"
+                }
+              ]
+            },
+            {
+              "codec_type": "audio",
+              "codec": "pcm_s24le",
+              "pixel_format": null,
+              "sample_rate": "48000",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "decoded_sha256": "f85f2c34eb2843d2aa5951ee6e8e76985655b2e3ae2cbdd76bdfd654ecf19997",
+              "decoded_bytes": 16000,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "8/375"
+                },
+                {
+                  "pts": "8/375",
+                  "dts": "8/375",
+                  "duration": "61/3000"
+                }
+              ]
+            }
+          ],
+          "chapters": [],
+          "snapshot_tags": {
+            "kronello_render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+            "kronello_export_snapshot_hash": "bc6ce55581fe8c5179a0298354504d6f82f333aa317a6d85b118c2fe0ad279ef"
+          }
+        }
+      }
+    },
+    {
+      "mode": "after",
+      "binary_sha256": "49df8a6d1cb6c44e305c0814e2128d8850d4261b461e0aa5662983f95632afed",
+      "case_sha256": "e7b449d8e1e355aeb35a2a53ce7fdd3bc1038405baea53201aa1967452399161",
+      "action": "lost-lease",
+      "observed_work": {
+        "marker": "first video source converted"
+      },
+      "signal_api_ms": 1.1165839969180524,
+      "signal_to_worker_exit_ms": 2988.617625000188,
+      "terminal_status": "interrupted",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": null,
+      "resumed": {
+        "attempt": 1,
+        "status": "succeeded",
+        "render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+        "oracle": {
+          "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+          "encoded_bytes": 1395590,
+          "streams": [
+            {
+              "codec_type": "video",
+              "codec": "prores",
+              "pixel_format": "yuv422p10le",
+              "sample_rate": null,
+              "channels": null,
+              "channel_layout": null,
+              "decoded_sha256": "81538dec82a9a3505d6fe9eb39b8d662beb5c73a0d375449576cad3737ea8f36",
+              "decoded_bytes": 33177600,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "1/24"
+                }
+              ]
+            },
+            {
+              "codec_type": "audio",
+              "codec": "pcm_s24le",
+              "pixel_format": null,
+              "sample_rate": "48000",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "decoded_sha256": "f85f2c34eb2843d2aa5951ee6e8e76985655b2e3ae2cbdd76bdfd654ecf19997",
+              "decoded_bytes": 16000,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "8/375"
+                },
+                {
+                  "pts": "8/375",
+                  "dts": "8/375",
+                  "duration": "61/3000"
+                }
+              ]
+            }
+          ],
+          "chapters": [],
+          "snapshot_tags": {
+            "kronello_render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+            "kronello_export_snapshot_hash": "bc6ce55581fe8c5179a0298354504d6f82f333aa317a6d85b118c2fe0ad279ef"
+          }
+        }
+      }
+    },
+    {
+      "mode": "before",
+      "binary_sha256": "c7e639b65cec202c56726f5dabf6ba0d8a50e5899d17f11d245dcb8b49518aa1",
+      "case_sha256": "e7b449d8e1e355aeb35a2a53ce7fdd3bc1038405baea53201aa1967452399161",
+      "action": "kill",
+      "observed_work": {
+        "marker": "first video source converted"
+      },
+      "signal_api_ms": 0.03145799564663321,
+      "signal_to_worker_exit_ms": 24.367958001676016,
+      "terminal_status": "interrupted",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": null,
+      "resumed": {
+        "attempt": 1,
+        "status": "succeeded",
+        "render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+        "oracle": {
+          "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+          "encoded_bytes": 1395590,
+          "streams": [
+            {
+              "codec_type": "video",
+              "codec": "prores",
+              "pixel_format": "yuv422p10le",
+              "sample_rate": null,
+              "channels": null,
+              "channel_layout": null,
+              "decoded_sha256": "81538dec82a9a3505d6fe9eb39b8d662beb5c73a0d375449576cad3737ea8f36",
+              "decoded_bytes": 33177600,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "1/24"
+                }
+              ]
+            },
+            {
+              "codec_type": "audio",
+              "codec": "pcm_s24le",
+              "pixel_format": null,
+              "sample_rate": "48000",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "decoded_sha256": "f85f2c34eb2843d2aa5951ee6e8e76985655b2e3ae2cbdd76bdfd654ecf19997",
+              "decoded_bytes": 16000,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "8/375"
+                },
+                {
+                  "pts": "8/375",
+                  "dts": "8/375",
+                  "duration": "61/3000"
+                }
+              ]
+            }
+          ],
+          "chapters": [],
+          "snapshot_tags": {
+            "kronello_render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+            "kronello_export_snapshot_hash": "bc6ce55581fe8c5179a0298354504d6f82f333aa317a6d85b118c2fe0ad279ef"
+          }
+        }
+      }
+    },
+    {
+      "mode": "after",
+      "binary_sha256": "49df8a6d1cb6c44e305c0814e2128d8850d4261b461e0aa5662983f95632afed",
+      "case_sha256": "e7b449d8e1e355aeb35a2a53ce7fdd3bc1038405baea53201aa1967452399161",
+      "action": "kill",
+      "observed_work": {
+        "marker": "first video source converted"
+      },
+      "signal_api_ms": 0.014457997167482972,
+      "signal_to_worker_exit_ms": 19.20491700002458,
+      "terminal_status": "interrupted",
+      "control_interval_ms": 50,
+      "heartbeat_interval_ms": 100,
+      "heartbeat_timeout_ms": 3000,
+      "worker_diagnostics": null,
+      "resumed": {
+        "attempt": 1,
+        "status": "succeeded",
+        "render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+        "oracle": {
+          "encoded_sha256": "b37925b78cf55b4851e104e97f6baa9402c3dfbfe4de99532e309813b77562f1",
+          "encoded_bytes": 1395590,
+          "streams": [
+            {
+              "codec_type": "video",
+              "codec": "prores",
+              "pixel_format": "yuv422p10le",
+              "sample_rate": null,
+              "channels": null,
+              "channel_layout": null,
+              "decoded_sha256": "81538dec82a9a3505d6fe9eb39b8d662beb5c73a0d375449576cad3737ea8f36",
+              "decoded_bytes": 33177600,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "1/24"
+                }
+              ]
+            },
+            {
+              "codec_type": "audio",
+              "codec": "pcm_s24le",
+              "pixel_format": null,
+              "sample_rate": "48000",
+              "channels": 2,
+              "channel_layout": "stereo",
+              "decoded_sha256": "f85f2c34eb2843d2aa5951ee6e8e76985655b2e3ae2cbdd76bdfd654ecf19997",
+              "decoded_bytes": 16000,
+              "packets": [
+                {
+                  "pts": "0",
+                  "dts": "0",
+                  "duration": "8/375"
+                },
+                {
+                  "pts": "8/375",
+                  "dts": "8/375",
+                  "duration": "61/3000"
+                }
+              ]
+            }
+          ],
+          "chapters": [],
+          "snapshot_tags": {
+            "kronello_render_snapshot_hash": "e3d0776759b7d0750874ef57762e465e72ffcc0cd6ce0a3cdec7d85623671b95",
+            "kronello_export_snapshot_hash": "bc6ce55581fe8c5179a0298354504d6f82f333aa317a6d85b118c2fe0ad279ef"
+          }
+        }
+      }
+    }
+  ],
+  "note": "Fresh owned states only; heartbeat policy is explicit. Signal API and physical process exit are separate.",
+  "all_resumed_pixels_pts_layout_encoded_and_identity_equal_to_fixed_reference": true
+}

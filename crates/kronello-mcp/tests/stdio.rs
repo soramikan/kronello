@@ -253,10 +253,13 @@ impl Client {
         input.flush().unwrap();
     }
     fn receive(&self) -> Value {
+        self.receive_for("raw request")
+    }
+    fn receive_for(&self, context: &str) -> Value {
         let line = self
             .lines
             .recv_timeout(Duration::from_secs(20))
-            .expect("MCP response timeout");
+            .unwrap_or_else(|error| panic!("MCP response timeout for {context}: {error}"));
         let value: Value = serde_json::from_str(&line).expect(&line);
         assert_eq!(value["jsonrpc"], "2.0");
         assert!(
@@ -268,8 +271,13 @@ impl Client {
     fn request(&mut self, method: &str, params: Value) -> Value {
         let id = self.next_id;
         self.next_id += 1;
+        let context = format!("{method} {}", params["name"].as_str().unwrap_or_default());
+        let start = std::time::Instant::now();
         self.send(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}));
-        let response = self.receive();
+        let response = self.receive_for(&context);
+        if std::env::var_os("KRONELLO_TEST_MCP_TRACE").is_some() {
+            eprintln!("{context}: {:?}", start.elapsed());
+        }
         assert_eq!(response["id"], id);
         response
     }
@@ -543,7 +551,9 @@ fn versions_negotiate_and_registry_schemas_are_self_contained() {
             client.request("unknown", json!({}))["error"]["code"],
             -32601
         );
-        assert!(client.finish().contains("INVALID_REQUEST"));
+        let diagnostics = client.finish();
+        eprintln!("fixture {version}: {} diagnostic bytes", diagnostics.len());
+        assert!(diagnostics.contains("INVALID_REQUEST"));
     }
 }
 
@@ -729,7 +739,9 @@ fn public_api_fixture_commands_return_schema_valid_success_from_real_binary() {
         // New registry entries are discovered/validated generically in the version
         // test and do not require a transport-specific command list here.
         assert_eq!(checked.len(), 19);
-        assert!(client.finish().contains("INVALID_REQUEST"));
+        let diagnostics = client.finish();
+        eprintln!("fixture {version}: {} diagnostic bytes", diagnostics.len());
+        assert!(diagnostics.contains("INVALID_REQUEST"));
     }
 }
 

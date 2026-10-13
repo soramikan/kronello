@@ -255,16 +255,13 @@ impl MediaRuntime {
         working: ColorSpace,
         hdr: Option<kronello_render::HdrSettings>,
         reverse_sampling: bool,
-    ) -> Result<(DecodedVideoFrame, VideoColorPolicy, bool), MediaError> {
+    ) -> Result<(std::sync::Arc<DecodedVideoFrame>, VideoColorPolicy, bool), MediaError> {
+        let _measure = kronello_render::measure_execution_stage("video_decode_prepare");
         let timing = std::env::var_os("KRONELLO_MEDIA_TIMING").is_some();
         let t0 = timing.then(std::time::Instant::now);
         self.resolve_verified(asset, project_path)?;
         let t1 = timing.then(std::time::Instant::now);
-        let frame = if reverse_sampling {
-            decoder.decode_at_reverse(time)?
-        } else {
-            decoder.decode_at(time)?
-        };
+        let frame = decoder.decode_shared(time, reverse_sampling)?;
         if let (Some(t0), Some(t1)) = (t0, t1) {
             eprintln!(
                 "    prepare: resolve_asset={:.2}ms decode_at={:.2}ms",
@@ -463,9 +460,12 @@ impl MediaRuntime {
         hdr: Option<kronello_render::HdrSettings>,
         reverse_sampling: bool,
         interpolation: Option<kronello_time::FrameInterpolation>,
+        cache: &mut crate::source_cache::SourceFrameCache,
     ) -> Result<SourcedVideo, MediaError> {
         let timing = std::env::var_os("KRONELLO_MEDIA_TIMING").is_some();
         let t0 = timing.then(std::time::Instant::now);
+        let path = self.resolve_verified(asset, project_path)?;
+        let fingerprint = assets::FileFingerprint::of(&std::fs::metadata(&path)?);
         let (frame, policy, is_hdr) = self.prepare_video_frame(
             decoder,
             asset,
@@ -477,7 +477,58 @@ impl MediaRuntime {
             reverse_sampling,
         )?;
         let t1 = timing.then(std::time::Instant::now);
-        let source = if interpolation.is_some() {
+        if interpolation.is_some() {
+            if reverse_sampling {
+                return Err(MediaError::UnsupportedFeature(
+                    "optical-flow interpolation requires forward sampling".into(),
+                ));
+            }
+            if is_hdr || hdr.is_some() {
+                return Err(MediaError::UnsupportedFeature(
+                    "optical-flow interpolation requires an SDR source".into(),
+                ));
+            }
+        }
+        if working == ColorSpace::Srgb {
+            return Err(MediaError::UnsupportedFeature(
+                "nonlinear video working space".into(),
+            ));
+        }
+        // Ordinary conversion depends on the exact presentation, not the
+        // request's location within it. Flow additionally depends on that time.
+        // ROI/crop are sampled later and do not change the full source pixels.
+        let key = crate::source_cache::SourceCacheKey {
+            path: path.clone(),
+            fingerprint,
+            identity: serde_json::json!([
+                "converted-source-v1",
+                self.capabilities.ffmpeg_version,
+                decoder.native.name,
+                asset,
+                stream_index,
+                frame.pts,
+                frame.end,
+                frame.width,
+                frame.height,
+                frame.pixel_format,
+                frame.color_primaries,
+                frame.color_transfer,
+                frame.color_matrix,
+                frame.color_range,
+                policy,
+                working,
+                hdr,
+                reverse_sampling,
+                interpolation,
+                interpolation.map(|_| time),
+            ])
+            .to_string(),
+        };
+        let cached = cache.get(&key);
+        let was_cached = cached.is_some();
+        let source = if let Some(source) = cached {
+            source
+        } else if interpolation.is_some() {
             if reverse_sampling {
                 return Err(MediaError::UnsupportedFeature(
                     "optical-flow interpolation requires forward sampling".into(),
@@ -515,6 +566,33 @@ impl MediaRuntime {
             self.resolve_verified(asset, project_path)?;
             sdr_video_source(rgba, frame.width, frame.height, &policy, working)
         };
+        let verified = self.resolve_verified(asset, project_path)?;
+        if verified != path
+            || assets::FileFingerprint::of(&std::fs::metadata(&verified)?) != fingerprint
+        {
+            return Err(MediaError::Decode(
+                "video source changed during conversion/reuse".into(),
+            ));
+        }
+        if !was_cached {
+            let bytes_per_pixel = if hdr.is_some() || interpolation.is_some() {
+                16
+            } else {
+                4
+            };
+            let pixels = (frame.width as usize)
+                .checked_mul(frame.height as usize)
+                .and_then(|count| count.checked_mul(bytes_per_pixel))
+                .unwrap_or(usize::MAX);
+            let payload = if bytes_per_pixel == 4 {
+                pixels
+                    .saturating_add(std::mem::size_of::<SdrSampler>())
+                    .saturating_add(std::mem::size_of::<[f64; 256]>())
+            } else {
+                pixels
+            };
+            cache.insert(key, source.clone(), payload);
+        }
         if let (Some(t0), Some(t1)) = (t0, t1) {
             eprintln!(
                 "  video_source: decode={:.2}ms convert={:.2}ms fmt={}",
@@ -581,7 +659,7 @@ impl MediaRuntime {
                 pixels: to_pixels(frame)?,
             });
         }
-        let next = match decoder.decode_at(frame.end) {
+        let next = match decoder.decode_shared(frame.end, false) {
             Ok(next) => next,
             // The tail presented frame has no successor to blend with.
             Err(MediaError::FrameNotFound(_)) => {
@@ -728,9 +806,179 @@ fn luma_of_rgba8(rgba: &[u8]) -> Vec<u8> {
 /// it. The identity covers the decoder implementation, locked source, and
 /// authored request — not the DAG node's sampling window, which the resolver
 /// appends when forming a raster identity.
+#[derive(Clone)]
 pub struct SourcedVideo {
     pub source: kronello_render::VideoSource,
     pub identity: String,
+}
+
+#[cfg(test)]
+mod converted_source_tests {
+    use super::*;
+    fn pixels(source: &kronello_render::VideoSource) -> Vec<[u32; 4]> {
+        (0..source.size[1] as usize)
+            .flat_map(|y| {
+                (0..source.size[0] as usize).map(move |x| source.sample(x, y).map(f32::to_bits))
+            })
+            .collect()
+    }
+    #[test]
+    fn source_sharing_preserves_independent_cursors_color_reverse_and_expected_hash_checks() {
+        let runtime = MediaRuntime::load().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("source.nut");
+        std::fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/fixtures/generated/media/cfr-24-1.nut"),
+            &path,
+        )
+        .unwrap();
+        let metadata = runtime
+            .open_video(&path)
+            .unwrap()
+            .stream_metadata()
+            .unwrap();
+        let mut asset = Asset {
+            id: kronello_model::AssetId::new(),
+            kind: kronello_model::AssetKind::Video,
+            content_hash: content_hash(&path).unwrap(),
+            streams: vec![metadata],
+            locator: kronello_model::AssetLocator {
+                relative: None,
+                absolute: Some(path.to_str().unwrap().into()),
+            },
+        };
+        let cursor = kronello_render::SceneKey {
+            instance_path: kronello_model::InstancePath::root(),
+            node: kronello_model::NodeId::new(),
+        };
+        let other = kronello_render::SceneKey {
+            node: kronello_model::NodeId::new(),
+            ..cursor.clone()
+        };
+        let mut cached = MediaSession::sharing_runtime(Ok(&runtime));
+        let mut plain = MediaSession::sharing_runtime(Ok(&runtime)).with_source_frame_limits(
+            SourceFrameCacheLimits {
+                entries: 0,
+                bytes: 0,
+            },
+        );
+        let time = Time::new(1, 48).unwrap();
+        for (key, time, working, hdr, reverse) in [
+            (&cursor, time, ColorSpace::LinearRec709, None, false),
+            (&other, time, ColorSpace::LinearRec709, None, false),
+            (
+                &cursor,
+                Time::new(1, 24).unwrap(),
+                ColorSpace::LinearRec709,
+                None,
+                false,
+            ),
+            (
+                &other,
+                Time::new(1, 24).unwrap(),
+                ColorSpace::LinearRec709,
+                None,
+                true,
+            ),
+            (&cursor, time, ColorSpace::LinearRec2020, None, false),
+            (
+                &cursor,
+                time,
+                ColorSpace::LinearRec2020,
+                Some(kronello_render::HdrSettings {
+                    transfer: kronello_render::HdrTransfer::Pq,
+                }),
+                false,
+            ),
+            (
+                &cursor,
+                time,
+                ColorSpace::LinearRec2020,
+                Some(kronello_render::HdrSettings {
+                    transfer: kronello_render::HdrTransfer::Hlg,
+                }),
+                false,
+            ),
+        ] {
+            for _ in 0..2 {
+                let actual = cached
+                    .video_source(
+                        key,
+                        &asset,
+                        temp.path(),
+                        0,
+                        time,
+                        working,
+                        hdr,
+                        reverse,
+                        None,
+                    )
+                    .unwrap();
+                let expected = plain
+                    .video_source(
+                        key,
+                        &asset,
+                        temp.path(),
+                        0,
+                        time,
+                        working,
+                        hdr,
+                        reverse,
+                        None,
+                    )
+                    .unwrap();
+                assert_eq!(actual.identity, expected.identity);
+                assert_eq!(pixels(&actual.source), pixels(&expected.source));
+            }
+        }
+        assert_eq!(cached.decoder_pool_stats().active_decoders, 2);
+        assert!(cached.source_frame_cache_stats().hits >= 8);
+        assert!(
+            cached.source_frame_cache_stats().retained_bytes
+                <= SourceFrameCacheLimits::default().bytes
+        );
+        let expected = asset.content_hash.clone();
+        asset.content_hash = "00".repeat(32);
+        assert_eq!(
+            cached
+                .video_source(
+                    &cursor,
+                    &asset,
+                    temp.path(),
+                    0,
+                    time,
+                    ColorSpace::LinearRec709,
+                    None,
+                    false,
+                    None
+                )
+                .err()
+                .unwrap()
+                .code(),
+            "ASSET_HASH_MISMATCH"
+        );
+        asset.content_hash = expected;
+        std::fs::write(&path, b"rewritten source").unwrap();
+        assert_eq!(
+            cached
+                .video_source(
+                    &cursor,
+                    &asset,
+                    temp.path(),
+                    0,
+                    time,
+                    ColorSpace::LinearRec709,
+                    None,
+                    false,
+                    None
+                )
+                .err()
+                .unwrap()
+                .code(),
+            "ASSET_HASH_MISMATCH"
+        );
+    }
 }
 /// A media-resolved DAG plus the content-addressed identity of every
 /// `RasterInput` it produced, keyed by DAG node index. Supplying the map to
@@ -752,6 +1000,7 @@ pub struct MediaSession {
     limits: DecoderPoolLimits,
     stats: DecoderPoolStats,
     retired_stats: VideoDecodeStats,
+    source_cache: crate::source_cache::SourceFrameCache,
 }
 #[derive(PartialEq, Eq)]
 struct DecoderKey {
@@ -782,6 +1031,13 @@ impl MediaSession {
         self.limits = limits;
         self.enforce_limits();
         self
+    }
+    pub fn with_source_frame_limits(mut self, limits: SourceFrameCacheLimits) -> Self {
+        self.source_cache.configure(limits);
+        self
+    }
+    pub fn source_frame_cache_stats(&self) -> SourceFrameCacheStats {
+        self.source_cache.stats
     }
     /// Seed the session with an already-attempted runtime load; the error form
     /// keeps the typed `(code, message)` pair the render surface reports.
@@ -883,6 +1139,7 @@ impl MediaSession {
             hdr,
             reverse_sampling,
             interpolation,
+            &mut self.source_cache,
         );
         if let Some(t0) = t0 {
             eprintln!(
@@ -1473,6 +1730,17 @@ impl<'a> SequentialVideoRenderBackend<'a> {
     pub fn pool_stats(&self) -> DecoderPoolStats {
         self.session.borrow().decoder_pool_stats()
     }
+    pub fn with_source_frame_limits(self, limits: SourceFrameCacheLimits) -> Self {
+        Self {
+            base: self.base,
+            session: std::cell::RefCell::new(
+                self.session.into_inner().with_source_frame_limits(limits),
+            ),
+        }
+    }
+    pub fn source_frame_cache_stats(&self) -> SourceFrameCacheStats {
+        self.session.borrow().source_frame_cache_stats()
+    }
     pub fn with_decoder_limits(self, limits: DecoderPoolLimits) -> Self {
         Self {
             base: self.base,
@@ -1532,8 +1800,10 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<BackendFrame, RenderError> {
         let _scope = self.begin_observation_scope()?;
+        let resolve = kronello_render::measure_execution_stage("dag_media_resolution");
         let resolved =
             resolve_dag_media_in(dag, self.base.project_path, &mut self.session.borrow_mut())?;
+        drop(resolve);
         self.base
             .backend
             .execute_with_inputs(&resolved.dag, cache, &resolved.input_identities)
@@ -1544,8 +1814,11 @@ impl RenderBackend for SequentialVideoRenderBackend<'_> {
         cache: &mut RenderCache,
     ) -> Result<Vec<[f32; 4]>, RenderError> {
         let _scope = self.begin_observation_scope()?;
+        let resolve = kronello_render::measure_execution_stage("dag_media_resolution");
         let resolved =
             resolve_dag_media_in(dag, self.base.project_path, &mut self.session.borrow_mut())?;
+        drop(resolve);
+        let _execution = kronello_render::measure_execution_stage("backend_linear_execution");
         self.base.backend.execute_linear_with_inputs(
             &resolved.dag,
             cache,

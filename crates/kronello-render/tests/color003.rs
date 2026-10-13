@@ -276,6 +276,82 @@ fn color003_missing_or_broken_lattice_is_a_typed_render_failure() {
 }
 
 #[test]
+fn prepared_export_lut_proof_preserves_pixels_and_typed_missing_or_corrupt_inputs() {
+    let asset = asset();
+    let (effect, properties) = lut_effect(asset.id, 1.0);
+    let project = project(
+        [0.5; 3],
+        1.0,
+        vec![(effect, properties)],
+        vec![asset.clone()],
+    );
+    let DocumentObject::Known(sequence) = &project.sequences[0] else {
+        unreachable!()
+    };
+    let snapshot = RenderSnapshot::for_target(
+        &project,
+        RenderTarget::Sequence {
+            sequence: sequence.id,
+        },
+        7,
+        Default::default(),
+    )
+    .unwrap();
+    let request = FrameRequest {
+        time: t(1, 2),
+        region: OutputRegion {
+            origin: [0.0; 2],
+            extent: [4.0, 1.0],
+            pixels: [4, 1],
+        },
+    };
+    let mut missing = ExportRenderSession::new(snapshot.clone(), &[]).unwrap();
+    assert_eq!(
+        missing
+            .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, _| panic!(
+                "missing LUT must not publish pixels"
+            ))
+            .unwrap_err()
+            .code(),
+        "LUT_INPUT_MISSING"
+    );
+    let mut broken = swapped_cube();
+    broken.data.pop();
+    assert_eq!(
+        ExportRenderSession::new(snapshot.clone().with_luts([(hash(), broken)].into()), &[])
+            .err()
+            .unwrap()
+            .code(),
+        "INVALID_LUT"
+    );
+    let snapshot = snapshot.with_luts([(hash(), swapped_cube())].into());
+    let mut prepared = ExportRenderSession::new(snapshot.clone(), &[]).unwrap();
+    for time in [t(1, 2), t(3, 4)] {
+        let request = FrameRequest { time, ..request };
+        let mut actual = Vec::new();
+        prepared
+            .render_linear_tiles(&CpuReferenceBackend, request, &mut |_, _, tile| {
+                actual.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+                Ok(())
+            })
+            .unwrap();
+        let mut expected = Vec::new();
+        render_frame_linear_tiles(
+            &snapshot,
+            &[],
+            &CpuReferenceBackend,
+            request,
+            &mut |_, _, tile| {
+                expected.extend(tile.into_iter().map(|pixel| pixel.map(f32::to_bits)));
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
 fn color003_scene_ir_binds_referenced_luts_and_dag_holds_tetrahedral_node() {
     let asset = asset();
     let unused = "ef".repeat(32);

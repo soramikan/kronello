@@ -948,6 +948,17 @@
         "export_snapshot_hash": {
           "type": "string"
         },
+        "frame_metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameMetadataManifest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bounded external metadata for long exports; inline frames are empty."
+        },
         "frames": {
           "items": {
             "$ref": "#/$defs/FrameMetadata"
@@ -970,6 +981,17 @@
             "$ref": "#/$defs/AvExportOutputReport"
           },
           "type": "array"
+        },
+        "performance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Opt-in execution measurements, excluded from snapshot identity."
         },
         "probe": {
           "$ref": "#/$defs/MediaProbe"
@@ -2009,7 +2031,7 @@
       ]
     },
     "ChannelMask": {
-      "description": "Versioned speaker-layout bitset (channel_mask v1): 1=mono, 3=stereo, 1551=5.1(side), 63=5.1(back), 1599=7.1",
+      "description": "Versioned speaker-layout bitset (channel_mask v1): 4=mono, 3=stereo, 1551=5.1(side), 63=5.1(back), 1599=7.1",
       "format": "uint64",
       "minimum": 0,
       "type": "integer"
@@ -5687,12 +5709,86 @@
       ],
       "type": "object"
     },
+    "ExecutionDiagnostics": {
+      "description": "Stage times may overlap on producer and consumer threads. Their sum is\nneither wall time nor GPU timestamp time. Payload gauges exclude allocator,\ncodec and driver memory; process RSS must be measured independently.",
+      "properties": {
+        "counts": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "peak_payload_bytes": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stages": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ExecutionStageMeasurement"
+          },
+          "type": "object"
+        },
+        "wall_us": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "wall_us",
+        "stages",
+        "counts",
+        "peak_payload_bytes"
+      ],
+      "type": "object"
+    },
     "ExecutionKind": {
       "enum": [
         "software",
         "hardware"
       ],
       "type": "string"
+    },
+    "ExecutionStageMeasurement": {
+      "properties": {
+        "calls": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "elapsed_us": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "first_samples_us": {
+          "description": "First 64 observations only; never grows with the export frame count.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 64,
+          "type": "array"
+        }
+      },
+      "required": [
+        "calls",
+        "elapsed_us"
+      ],
+      "type": "object"
     },
     "ExpandedRepeatSource": {
       "additionalProperties": false,
@@ -8075,6 +8171,65 @@
       ],
       "type": "object"
     },
+    "FrameMetadataIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frame_rate": {
+          "$ref": "#/$defs/FrameRate"
+        },
+        "render_snapshot_hash": {
+          "type": "string"
+        },
+        "start_frame": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "render_snapshot_hash",
+        "frame_rate",
+        "start_frame",
+        "frame_count"
+      ],
+      "type": "object"
+    },
+    "FrameMetadataManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunk_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "$ref": "#/$defs/FrameMetadataIdentity"
+        },
+        "root": {
+          "type": "string"
+        },
+        "root_sha256": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "root",
+        "root_sha256",
+        "identity",
+        "chunk_count"
+      ],
+      "type": "object"
+    },
     "FrameRate": {
       "additionalProperties": false,
       "description": "A positive exact number of frames per second.",
@@ -9086,6 +9241,88 @@
       "required": [
         "code",
         "message"
+      ],
+      "type": "object"
+    },
+    "JobFramesRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "limit": {
+          "default": 64,
+          "format": "uint",
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job"
+      ],
+      "type": "object"
+    },
+    "JobFramesResult": {
+      "properties": {
+        "attempt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SequenceFrameFiles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/FrameMetadata"
+          },
+          "type": "array"
+        },
+        "job": {
+          "type": "string"
+        },
+        "next_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_frames": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "job",
+        "attempt",
+        "total_frames",
+        "offset",
+        "frames"
       ],
       "type": "object"
     },
@@ -15045,6 +15282,36 @@
         {
           "additionalProperties": false,
           "properties": {
+            "job": {
+              "type": "string"
+            },
+            "limit": {
+              "default": 64,
+              "format": "uint",
+              "maximum": 64,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "operation": {
+              "const": "job.frames",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "job"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "operation": {
               "const": "job.list",
               "type": "string"
@@ -17419,6 +17686,23 @@
           "additionalProperties": false,
           "properties": {
             "kind": {
+              "const": "job_frames",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/JobFramesResult"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
               "const": "jobs",
               "type": "string"
             },
@@ -19218,6 +19502,22 @@
       ],
       "type": "object"
     },
+    "SequenceFrameFiles": {
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "$ref": "#/$defs/OutputFile"
+        },
+        "numeric": {
+          "$ref": "#/$defs/OutputFile"
+        }
+      },
+      "required": [
+        "numeric",
+        "display"
+      ],
+      "type": "object"
+    },
     "SequenceId": {
       "description": "Stable UUID identity, never derived from a display name or array index.\nUUID v4 allows independent editing processes to allocate IDs without a\ncentral counter. Allocate once during editing and persist it; ID\ngeneration is not part of deterministic property evaluation.",
       "format": "uuid",
@@ -19228,6 +19528,16 @@
       "properties": {
         "frame_grid": {
           "type": "string"
+        },
+        "frame_metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrameMetadataManifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "frame_rate": {
           "$ref": "#/$defs/FrameRate"

@@ -499,13 +499,13 @@ impl Gradient {
 }
 
 /// Evaluated, validated design-space values, never a serialized bitmap/cache.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedShape {
     pub geometry: ResolvedGeometry,
     pub fill: Option<ResolvedFill>,
     pub stroke: Option<ResolvedStroke>,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum ResolvedGeometry {
     Rectangle {
         size: [FiniteF64; 2],
@@ -522,13 +522,13 @@ pub enum ResolvedGeometry {
         offset: f64,
     },
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedFill {
     pub gradient: Option<Box<ResolvedGradient>>,
     pub color: Color,
     pub rule: FillRule,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedStroke {
     pub options: Option<Box<ResolvedStrokeOptions>>,
     pub gradient: Option<Box<ResolvedGradient>>,
@@ -539,7 +539,7 @@ pub struct ResolvedStroke {
     pub miter_limit: FiniteF64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ResolvedStrokeOptions {
     pub geometry_version: String,
     pub alignment: StrokeAlignment,

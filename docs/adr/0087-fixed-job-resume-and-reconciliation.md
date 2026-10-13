@@ -1,6 +1,6 @@
 # ADR-0087 固定入力ジョブの再実行と公開境界の照合
 
-- 状態: 採用
+- 状態: 採用（部分置換: [ADR-0165](0165-bounded-export-metadata-and-receipts.md)のmovie/GIF metadata・artifact index格納形式）
 - 日付: 2026-10-06
 - 対象: RECOVERY-001
 - 部分置換: ADR-0050 の interrupted 後の再開・temporary output 回収・rename 後の照合。独立 worker、固定 snapshot、FIFO slot、NOREPLACE 公開は維持する。

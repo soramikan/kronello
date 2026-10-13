@@ -396,8 +396,8 @@ fn exact_forward_state_is_bounded_and_errors_reset_history() {
         }
         assert_eq!(decoder.decode_stats().interval_hits, 20);
         assert_eq!(decoder.decode_stats().decoded_frames, 6);
-        assert_eq!(decoder.decode_stats().cache_clone_bytes, 6 * 384);
-        assert_eq!(decoder.decode_stats().returned_clone_bytes, 20 * 384);
+        assert_eq!(decoder.decode_stats().cache_clone_bytes, 0);
+        assert_eq!(decoder.decode_stats().returned_clone_bytes, (6 + 20) * 384);
         assert_eq!(
             decoder.path_report().transfers.cpu_copy_bytes,
             (6 + 6 + 20) * 384

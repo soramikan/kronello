@@ -51,6 +51,7 @@ unsafe extern "C" {
         full_range: c_int,
         output: *mut u8,
     ) -> c_int;
+    fn km_video_converter_creations(k: *mut c_void) -> u64;
     fn km_video_rgba64(
         k: *mut c_void,
         input: *const u8,
@@ -86,6 +87,8 @@ unsafe extern "C" {
     fn km_encoder_close(e: *mut c_void);
     fn km_encoder_frame(e: *mut c_void, rgba: *const u8, pts: i64, duration: i64) -> c_int;
     fn km_encoder_finish(e: *mut c_void) -> c_int;
+    fn km_encoder_measure(e: *mut c_void, enabled: c_int);
+    fn km_encoder_measurements(e: *mut c_void, out: *mut u64);
     fn km_encoder_frame_size(e: *mut c_void) -> c_int;
     fn km_encoder_format(e: *mut c_void) -> *const c_char;
     fn km_encoder_open_dnx(
@@ -458,6 +461,7 @@ pub(crate) fn video_rgba(
     frame: &kronello_render::DecodedVideoFrame,
     full_range: bool,
 ) -> Result<Vec<u8>, MediaError> {
+    let _measure = kronello_render::measure_execution_stage("source_rgba8_conversion");
     if frame.width == 0
         || frame.height == 0
         || u64::from(frame.width) * u64::from(frame.height) > DECODED_VIDEO_PIXEL_BUDGET
@@ -471,6 +475,8 @@ pub(crate) fn video_rgba(
     let size = c_int::try_from(frame.pixels.len())
         .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
     let mut output = vec![0; frame.width as usize * frame.height as usize * 4];
+    // SAFETY: runtime remains live and is confined to the calling thread.
+    let before = unsafe { km_video_converter_creations(runtime.0.as_ptr()) };
     // SAFETY: dimensions and exact packed input size are verified by the shim;
     // the RGBA output allocation covers width*height*4 and lives through the call.
     if unsafe {
@@ -488,6 +494,13 @@ pub(crate) fn video_rgba(
     {
         return Err(MediaError::Decode(runtime.error()));
     }
+    kronello_render::count_execution("source_rgba8_conversions", 1);
+    // SAFETY: the same live thread-confined runtime owns these converter slots.
+    let created = unsafe { km_video_converter_creations(runtime.0.as_ptr()) } - before;
+    kronello_render::count_execution("source_sws_context_creations", created);
+    kronello_render::count_execution("source_sws_context_reuses", u64::from(created == 0));
+    kronello_render::count_execution("source_rgba8_bytes", output.len() as u64);
+    kronello_render::observe_execution_payload("source_rgba8_buffer", output.len() as u64);
     Ok(output)
 }
 pub(crate) fn video_rgba64(
@@ -509,6 +522,8 @@ pub(crate) fn video_rgba64(
     let size = c_int::try_from(frame.pixels.len())
         .map_err(|_| MediaError::InvalidInput("video pixel budget".into()))?;
     let mut output = vec![0; frame.width as usize * frame.height as usize * 8];
+    // SAFETY: runtime remains live and is confined to the calling thread.
+    let before = unsafe { km_video_converter_creations(runtime.0.as_ptr()) };
     // SAFETY: dimensions and exact packed input size are verified by the shim;
     // the RGBA64 output allocation covers width*height*8 and lives through the call.
     if unsafe {
@@ -527,6 +542,12 @@ pub(crate) fn video_rgba64(
     {
         return Err(MediaError::Decode(runtime.error()));
     }
+    // SAFETY: the same live thread-confined runtime owns these converter slots.
+    let created = unsafe { km_video_converter_creations(runtime.0.as_ptr()) } - before;
+    kronello_render::count_execution("source_sws_context_creations", created);
+    kronello_render::count_execution("source_sws_context_reuses", u64::from(created == 0));
+    kronello_render::count_execution("source_rgba64_conversions", 1);
+    kronello_render::observe_execution_payload("source_rgba64_buffer", output.len() as u64);
     Ok(output)
 }
 impl Drop for NativeDecoder {
@@ -534,13 +555,51 @@ impl Drop for NativeDecoder {
         unsafe { km_decoder_close(self.ptr.as_ptr()) }
     }
 }
+#[cfg(feature = "export-prototypes")]
+unsafe extern "C" {
+    fn km_encoder_direct_pcm_mux(
+        encoder: *mut c_void,
+        audio: *const c_char,
+        render_hash: *const c_char,
+        export_hash: *const c_char,
+    ) -> c_int;
+}
 pub(crate) struct NativeEncoder<'a> {
     ptr: NonNull<c_void>,
     runtime: &'a NativeRuntime,
     pub pixel_format: String,
     pub frame_size: u64,
+    measured: bool,
+    last_measurements: [u64; 8],
 }
 impl<'a> NativeEncoder<'a> {
+    #[cfg(feature = "export-prototypes")]
+    pub(crate) fn direct_pcm_mux(
+        &mut self,
+        audio: &Path,
+        render_hash: &str,
+        export_hash: &str,
+    ) -> Result<(), MediaError> {
+        let audio = path_string(audio)?;
+        let render_hash = CString::new(render_hash)
+            .map_err(|_| MediaError::InvalidInput("render hash".into()))?;
+        let export_hash = CString::new(export_hash)
+            .map_err(|_| MediaError::InvalidInput("export hash".into()))?;
+        // SAFETY: unique fresh encoder, live strings and runtime; the native
+        // state owns the single audio demux packet until encoder Drop.
+        if unsafe {
+            km_encoder_direct_pcm_mux(
+                self.ptr.as_ptr(),
+                audio.as_ptr(),
+                render_hash.as_ptr(),
+                export_hash.as_ptr(),
+            )
+        } < 0
+        {
+            return Err(MediaError::Encode(self.runtime.error()));
+        }
+        Ok(())
+    }
     pub(crate) fn open_color(
         runtime: &'a NativeRuntime,
         path: &Path,
@@ -584,7 +643,12 @@ impl<'a> NativeEncoder<'a> {
                 MediaError::Encode(runtime.error())
             }
         })?;
+        let measured = kronello_render::execution_diagnostics_enabled();
+        // SAFETY: ptr is our live, exclusively owned native encoder.
+        unsafe { km_encoder_measure(ptr.as_ptr(), c_int::from(measured)) };
         Ok(Self {
+            measured,
+            last_measurements: [0; 8],
             ptr,
             runtime,
             pixel_format: unsafe { string(km_encoder_format(ptr.as_ptr())) },
@@ -631,7 +695,12 @@ impl<'a> NativeEncoder<'a> {
                 MediaError::Encode(runtime.error())
             }
         })?;
+        let measured = kronello_render::execution_diagnostics_enabled();
+        // SAFETY: ptr is our live, exclusively owned native encoder.
+        unsafe { km_encoder_measure(ptr.as_ptr(), c_int::from(measured)) };
         Ok(Self {
+            measured,
+            last_measurements: [0; 8],
             ptr,
             runtime,
             pixel_format: unsafe { string(km_encoder_format(ptr.as_ptr())) },
@@ -645,18 +714,57 @@ impl<'a> NativeEncoder<'a> {
         pts: i64,
         duration: i64,
     ) -> Result<(), MediaError> {
-        if unsafe { km_encoder_frame(self.ptr.as_ptr(), pixels.as_ptr(), pts, duration) } < 0 {
+        let result = unsafe { km_encoder_frame(self.ptr.as_ptr(), pixels.as_ptr(), pts, duration) };
+        self.record_measurements();
+        if result < 0 {
             Err(MediaError::Encode(self.runtime.error()))
         } else {
             Ok(())
         }
     }
     pub(crate) fn finish(&mut self) -> Result<(), MediaError> {
-        if unsafe { km_encoder_finish(self.ptr.as_ptr()) } < 0 {
+        let result = unsafe { km_encoder_finish(self.ptr.as_ptr()) };
+        self.record_measurements();
+        if result < 0 {
             Err(MediaError::Encode(self.runtime.error()))
         } else {
             Ok(())
         }
+    }
+    fn record_measurements(&mut self) {
+        if !self.measured {
+            return;
+        }
+        let mut values = [0_u64; 8];
+        // SAFETY: encoder remains owned/live and the output covers exactly
+        // the eight uint64_t counters written by the audited shim.
+        unsafe { km_encoder_measurements(self.ptr.as_ptr(), values.as_mut_ptr()) };
+        for (calls, time, name) in [
+            (0, 1, "native_rgba_to_yuv"),
+            (2, 3, "native_codec_send"),
+            (4, 5, "native_codec_receive"),
+        ] {
+            let count = values[calls].saturating_sub(self.last_measurements[calls]);
+            if count > 0 {
+                kronello_render::count_execution(name, count);
+                kronello_render::record_execution_duration(
+                    name,
+                    std::time::Duration::from_micros(
+                        values[time].saturating_sub(self.last_measurements[time]),
+                    ),
+                );
+            }
+        }
+        for (index, name) in [(6, "native_packet_write"), (7, "native_trailer_close")] {
+            let delta = values[index].saturating_sub(self.last_measurements[index]);
+            if delta > 0 {
+                kronello_render::record_execution_duration(
+                    name,
+                    std::time::Duration::from_micros(delta),
+                );
+            }
+        }
+        self.last_measurements = values;
     }
 }
 impl Drop for NativeEncoder<'_> {
@@ -749,6 +857,50 @@ impl Drop for NativeGifEncoder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_converter_reuse_matches_fresh_contexts_across_formats_ranges_and_sizes() {
+        let runtime = crate::MediaRuntime::load().unwrap();
+        for (width, height, format, bytes) in [
+            (16, 16, "yuv420p", vec![113; 384]),
+            (16, 16, "yuv420p10le", 451_u16.to_le_bytes().repeat(384)),
+            (8, 4, "rgba", [17, 129, 231, 127].repeat(32)),
+            (16, 16, "yuv420p", vec![151; 384]),
+        ] {
+            let frame = kronello_render::DecodedVideoFrame {
+                pts: Rational::ZERO,
+                end: Rational::ONE,
+                width,
+                height,
+                pixel_format: format.into(),
+                color_primaries: "bt709".into(),
+                color_transfer: "bt709".into(),
+                color_matrix: "bt709".into(),
+                color_range: "tv".into(),
+                pixels: bytes,
+            };
+            for full_range in [false, true, false] {
+                let fresh = crate::MediaRuntime::load().unwrap();
+                let expected = video_rgba(&fresh.native, &frame, full_range).unwrap();
+                for _ in 0..3 {
+                    assert_eq!(
+                        video_rgba(&runtime.native, &frame, full_range).unwrap(),
+                        expected
+                    );
+                }
+                for bt2020 in [false, true, false] {
+                    let fresh = crate::MediaRuntime::load().unwrap();
+                    let expected = video_rgba64(&fresh.native, &frame, full_range, bt2020).unwrap();
+                    for _ in 0..3 {
+                        assert_eq!(
+                            video_rgba64(&runtime.native, &frame, full_range, bt2020).unwrap(),
+                            expected
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn hevc_delivery_mux_configuration_requires_hvc1() {
@@ -918,6 +1070,8 @@ unsafe extern "C" {
         audio_channels: c_int,
         chapters: *const KmChapter,
         chapter_count: c_int,
+        checkpoint: Option<extern "C" fn(*mut c_void) -> c_int>,
+        checkpoint_data: *mut c_void,
     ) -> c_int;
 }
 
@@ -1404,6 +1558,7 @@ impl NativeRuntime {
         profile: MovieProfile,
         audio_channels: u32,
         chapters: &[crate::MediaChapter],
+        checkpoint: Option<&mut dyn FnMut() -> Result<(), MediaError>>,
     ) -> Result<(), MediaError> {
         let video = path_string(video)?;
         let audio = path_string(audio)?;
@@ -1443,7 +1598,13 @@ impl NativeRuntime {
         }
         // SAFETY: all strings, the chapter array and the runtime live
         // throughout the synchronous mux; titles outlive the call.
-        if unsafe {
+        let mut control = MuxControl {
+            checkpoint,
+            error: None,
+        };
+        let callback: Option<extern "C" fn(*mut c_void) -> c_int> =
+            control.checkpoint.as_ref().map(|_| mux_checkpoint as _);
+        let status = unsafe {
             km_mux_av(
                 self.0.as_ptr(),
                 video.as_ptr(),
@@ -1455,12 +1616,41 @@ impl NativeRuntime {
                 audio_channels,
                 native.as_ptr(),
                 native.len() as c_int,
+                callback,
+                (&mut control as *mut MuxControl<'_>).cast(),
             )
-        } < 0
-        {
+        };
+        if let Some(error) = control.error {
+            return Err(error);
+        }
+        if status < 0 {
             return Err(MediaError::Encode(self.error()));
         }
         Ok(())
+    }
+}
+struct MuxControl<'a> {
+    checkpoint: Option<&'a mut dyn FnMut() -> Result<(), MediaError>>,
+    error: Option<MediaError>,
+}
+extern "C" fn mux_checkpoint(data: *mut c_void) -> c_int {
+    // SAFETY: km_mux_av invokes this only synchronously with the live,
+    // uniquely borrowed control supplied by NativeRuntime::mux_av.
+    let control = unsafe { &mut *data.cast::<MuxControl<'_>>() };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        kronello_render::count_execution("mux_control_callbacks", 1);
+        control.checkpoint.as_mut().expect("enabled mux callback")()
+    }));
+    match result {
+        Ok(Ok(())) => 0,
+        Ok(Err(error)) => {
+            control.error = Some(error);
+            -1
+        }
+        Err(_) => {
+            control.error = Some(MediaError::Encode("mux checkpoint panicked".into()));
+            -1
+        }
     }
 }
 /// Round a nonnegative rational time to 1/48000 master-clock ticks, half up.

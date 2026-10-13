@@ -43,3 +43,21 @@
 最終版のfmt・workspace all-targets Clippy・workspace testが成功した。通常1325件、doctest2件、Swift選択回帰36件、製品hardware/Metal実機6件を確認し、589 sourceのhashは終了時も一致した。47件のignoredを通常成功数へ含めない。詳細は[最終receipt](perf-005-final-validation.json)。実音声/Metalは初回3rateと検証終了後の2rate、全5回でunderrun/missing audio frames 0、seek/stop/resume sample位置一致。検証負荷下の1〜2frame遅延も残して記録した。
 
 PR用の切り出しでは、開始時点 `d03b25e2` を `codex/performance-baseline` として保存し、共存していたMODEL-004の27ファイルと共有ファイル内の変更を除外した。上記の測定・検証receiptは当時のsource identityを保持する。MODEL-004を除いたPR用ソースの再検証は[切り出し検証](perf-pr-validation.json)に別記する。元の作業場所の変更・既存PR #17は保持した。
+
+## 書き出しの追加計画 PERF-006〜014
+
+2026-10-12のmain `656ecc3`を基点にした[追加計画](performance-export-plan.md)の結果は以下へ分けて記録する。上のPERF-002〜005受け入れ範囲と測定値は当時の記録として保持する。
+
+| 項目 | 結果と検証記録 |
+|---|---|
+| PERF-006 | [固定実worker・全工程診断・独立oracle](perf-006.md) |
+| PERF-007 | [書き出し寿命の静的準備・有界sample SceneIR共有](perf-007.md) |
+| PERF-008 | [素材変換cache・共有native frame・SwsContext保持、4K変換40→1](perf-008.md) |
+| PERF-009 | [時間間隔での進捗保存・取消/lease/heartbeat/復旧](perf-009.md) |
+| PERF-010 | [色変換の直接書込・同条件複数出力共有・native並列度比較](perf-010.md) |
+| PERF-011 | [音声mix共有・検証済みspoolの任意再利用](perf-011.md) |
+| PERF-012 | [status/画像のGPU待機統合・有界staging、4K wait80→40](perf-012.md) |
+| PERF-013 | [長尺metadata/receipt・ページAPI/復旧・probe共有・mux取消](perf-013.md) |
+| PERF-014 | [任意featureのMetal/VT surfaceとProRes直接muxの試作・対応範囲・採用保留](perf-014.md) |
+
+新しい長尺writerと旧receiptの互換reader、default改善と未採用の試作、保持payloadとRSS、特定fixtureの速度と一般作品の速度をそれぞれ区別する。SQLite native VFS修正とSyphon CLI初期化の検証は[SQLite](sqlite-vfs-deadlock.md)・[Syphon](syphon-cli-bundle-probe.md)を参照する。

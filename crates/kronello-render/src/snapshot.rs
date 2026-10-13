@@ -516,12 +516,14 @@ impl RenderSnapshot {
     /// Same sorted-object compact UTF-8/SHA-256 convention as STORE-001. Arrays
     /// retain authored order; every lock, profile, version and revision is hashed.
     pub fn content_hash(&self) -> Result<String, RenderError> {
+        let _measure = crate::measure_execution_stage("snapshot_canonical_hash");
         let value = serde_json::to_value(self)?;
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     /// Rendering content identity, excluding transaction bookkeeping only.
     /// Every document field, lock, profile, and semantic version remains hashed.
     pub fn evaluation_content_hash(&self) -> Result<String, RenderError> {
+        let _measure = crate::measure_execution_stage("snapshot_evaluation_hash");
         let mut value = serde_json::to_value(self)?;
         value
             .as_object_mut()
@@ -530,6 +532,7 @@ impl RenderSnapshot {
         Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&value)?)))
     }
     pub fn validate(&self) -> Result<(), RenderError> {
+        let _measure = crate::measure_execution_stage("snapshot_validation");
         if let Some(temporal) = self.profile.temporal {
             temporal.validate()?;
         }
@@ -958,7 +961,7 @@ fn render_media<'a>(
 /// bold/italic flags). Glyph coordinates are text-local; `origin` is the
 /// text-local origin in root Composition design_px after anchor/safe-area
 /// placement, so node transforms still compose normally.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CaptionDraw {
     pub layout: LayoutResult,
     /// Draw-time flags indexed by each glyph's `style_index`.
@@ -969,7 +972,7 @@ pub struct CaptionDraw {
     pub background: Option<kronello_model::Color>,
     pub origin: [f64; 2],
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum SceneContent {
     Empty,
     Shape {
@@ -1000,17 +1003,18 @@ pub enum SceneContent {
 /// Resolved FX-003 transition operation on one incoming clip node
 /// (ADR-0109). Crossfade and dip use post_effect_opacity for the incoming
 /// ramp; wipe attaches a reveal rectangle; dip also lowers a color underlay.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum SceneTransition {
     /// Hard-edge reveal rectangle in root design_px (wipe; no feathering).
     Reveal { min: [f64; 2], max: [f64; 2] },
     /// Dip color composited beneath the node at the given opacity.
     Dip { color: Color, opacity: f64 },
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SceneNodeIr {
     pub key: SceneKey,
     pub parent: Option<SceneKey>,
+    #[serde(serialize_with = "serialize_affine")]
     pub world_transform: kronello_eval::Affine2,
     pub opacity: f64,
     pub post_effect_opacity: f64,
@@ -1030,7 +1034,7 @@ pub struct SceneNodeIr {
 }
 /// Resolution-independent text layout and shape values, in local design_px.
 /// Output region/scale appear only in DAG construction. No backend objects.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SceneIr {
     pub composition: CompositionId,
     pub time: Time,
@@ -1045,6 +1049,13 @@ pub struct SceneIr {
     pub luts: BTreeMap<AssetId, kronello_model::CubeLut>,
 }
 
+fn serialize_affine<S: serde::Serializer>(
+    value: &kronello_eval::Affine2,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    value.0.serialize(serializer)
+}
+
 /// An owned immutable snapshot whose full semantic validation has succeeded.
 /// No mutable access or deserialization can manufacture this proof; changing
 /// a snapshot requires constructing and validating a new value.
@@ -1052,10 +1063,19 @@ pub struct SceneIr {
 pub struct ValidatedRenderSnapshot {
     snapshot: RenderSnapshot,
     sequence_root: Option<Composition>,
+    canonical_hash: String,
+    evaluation_hash: String,
 }
 impl ValidatedRenderSnapshot {
     pub fn new(snapshot: RenderSnapshot) -> Result<Self, RenderError> {
         snapshot.validate()?;
+        let canonical_hash = snapshot.content_hash()?;
+        let evaluation_hash = snapshot.evaluation_content_hash()?;
+        for lattice in snapshot.luts.values() {
+            lattice.validate()?;
+            lattice.validate_document_size()?;
+        }
+        let _preparation = crate::measure_execution_stage("static_sequence_preparation");
         let sequence_root = snapshot
             .sequence
             .map(|id| crate::sequence::lower_sequence(&snapshot.project, id))
@@ -1063,7 +1083,12 @@ impl ValidatedRenderSnapshot {
         Ok(Self {
             snapshot,
             sequence_root,
+            canonical_hash,
+            evaluation_hash,
         })
+    }
+    pub fn canonical_hash(&self) -> &str {
+        &self.canonical_hash
     }
     /// Serialized retained payload, excluding allocator/device overhead.
     pub fn retained_payload_bytes(&self) -> Result<usize, serde_json::Error> {
@@ -1074,7 +1099,10 @@ impl ValidatedRenderSnapshot {
             .map(serde_json::to_vec)
             .transpose()?
             .map_or(0, |bytes| bytes.len());
-        Ok(snapshot.saturating_add(root))
+        Ok(snapshot
+            .saturating_add(root)
+            .saturating_add(self.canonical_hash.len())
+            .saturating_add(self.evaluation_hash.len()))
     }
 }
 impl std::ops::Deref for ValidatedRenderSnapshot {
@@ -1104,7 +1132,7 @@ pub fn build_scene_ir_with_cache(
     cache: &mut crate::RenderCache,
 ) -> Result<SceneIr, RenderError> {
     snapshot.validate()?;
-    build_scene_ir_validated_inner(snapshot, time, fonts, cache, None)
+    build_scene_ir_validated_inner(snapshot, time, fonts, cache, None, None)
 }
 
 /// Time-dependent scene evaluation from a validation proof. The caller owns
@@ -1122,6 +1150,7 @@ pub fn build_scene_ir_prevalidated(
         fonts,
         cache,
         snapshot.sequence_root.as_ref(),
+        Some(&snapshot.evaluation_hash),
     )
 }
 fn build_scene_ir_validated_inner(
@@ -1130,7 +1159,9 @@ fn build_scene_ir_validated_inner(
     fonts: &[FontData<'_>],
     cache: &mut crate::RenderCache,
     sequence_root: Option<&Composition>,
+    evaluation_identity: Option<&str>,
 ) -> Result<SceneIr, RenderError> {
+    let _measure = crate::measure_execution_stage("scene_ir_evaluation");
     let (definitions, simulation_proof) =
         crate::simulation::lower(snapshot, time, fonts, cache, sequence_root)?;
     let registry = render_registry();
@@ -1276,7 +1307,10 @@ fn build_scene_ir_validated_inner(
     let (seeds, aliases) = snapshot.project.repeater_context();
     let graph = graph.with_repeater_context(seeds, aliases);
     templates.layout_inputs(&snapshot.project, &definitions, &graph, time, fonts, cache)?;
-    let identity = snapshot.evaluation_content_hash()?;
+    let identity = match evaluation_identity {
+        Some(identity) => std::borrow::Cow::Borrowed(identity),
+        None => std::borrow::Cow::Owned(snapshot.evaluation_content_hash()?),
+    };
     let evaluated = graph.evaluate_scene_with_properties(time, &mut |keys, time| {
         if snapshot.project.template_instances.is_empty() {
             keys.iter()
@@ -1357,10 +1391,12 @@ fn build_scene_ir_validated_inner(
                             ),
                         }
                     })?;
-                    lattice
-                        .validate()
-                        .and_then(|()| lattice.validate_document_size())
-                        .map_err(RenderError::from)?;
+                    if evaluation_identity.is_none() {
+                        lattice
+                            .validate()
+                            .and_then(|()| lattice.validate_document_size())
+                            .map_err(RenderError::from)?;
+                    }
                     luts.entry(*asset_id).or_insert_with(|| lattice.clone());
                 }
                 Ok(resolved)

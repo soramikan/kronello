@@ -64,6 +64,8 @@ M4の合否基準は基準機の実測後、利用者の確認により [ADR-009
 
 ### 計測項目
 
+PERF-006〜014の追加書き出し改善は[依頼計画](../testing/performance-export-plan.md)と[PERF-006](../testing/perf-006.md)で追跡する。`KRONELLO_EXPORT_DIAGNOSTICS=1`による実行所有の有界なstage/counter、任意の`AvExportReport.performance`、workerの`performance-attempt-N.json`を[ADR-0158](../adr/0158-scoped-export-execution-measurements.md)に従って採用する。時計は式・snapshot identityへ含めず、入れ子・producer/consumerのhost時間の合計をwall/GPU時間と扱わない。成功した明示DB write commit、payload、sampled RSS、GPU transfer/waitを分ける。全fixture matrixと工程分離の受け入れは進行中。
+
 `compile_ms`、`eval_ms`、`layout_ms`、`raster_ms`、`gpu_ms`、`decode_wait_ms`、`encode_wait_ms`、CPU / GPU transfer bytes、`peak_memory`、`cache_hit_ratio`、`samples_per_frame`。
 
 

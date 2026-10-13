@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "videotoolbox_private_sei_normalization_enabled": false,
+  "records": [
+    {
+      "raw_evidence": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/evidence.json",
+      "raw_sha256": "d5af8e35911328f0bd2d54af7f162ec236cf7b2068aac0f8ba22399394bd6d47",
+      "all_declared_packet_comparisons_equal": true,
+      "all_packet_payload_time_color_chapters_equal": true,
+      "trials": [
+        {
+          "pair": 0,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/0-before/movie.gif",
+              "encoded_sha256": "917c98fefb7f547b9764028f17903492f58b062e0c94e65444cbaa4d7835bbd4",
+              "packet_metadata_sha256": "5482c9b1a128760072f968d0bd411f8bba499326ef7cd1a2b8eee563af12213f",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                10000
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 0,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/0-after/movie.gif",
+              "encoded_sha256": "917c98fefb7f547b9764028f17903492f58b062e0c94e65444cbaa4d7835bbd4",
+              "packet_metadata_sha256": "5482c9b1a128760072f968d0bd411f8bba499326ef7cd1a2b8eee563af12213f",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                10000
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/1-after/movie.gif",
+              "encoded_sha256": "917c98fefb7f547b9764028f17903492f58b062e0c94e65444cbaa4d7835bbd4",
+              "packet_metadata_sha256": "5482c9b1a128760072f968d0bd411f8bba499326ef7cd1a2b8eee563af12213f",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                10000
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 1,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/1-before/movie.gif",
+              "encoded_sha256": "917c98fefb7f547b9764028f17903492f58b062e0c94e65444cbaa4d7835bbd4",
+              "packet_metadata_sha256": "5482c9b1a128760072f968d0bd411f8bba499326ef7cd1a2b8eee563af12213f",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                10000
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "before",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/2-before/movie.gif",
+              "encoded_sha256": "917c98fefb7f547b9764028f17903492f58b062e0c94e65444cbaa4d7835bbd4",
+              "packet_metadata_sha256": "5482c9b1a128760072f968d0bd411f8bba499326ef7cd1a2b8eee563af12213f",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                10000
+              ]
+            }
+          ]
+        },
+        {
+          "pair": 2,
+          "mode": "after",
+          "outputs": [
+            {
+              "path": "/Users/sora/Repositories/soramikan/kronello/target/perf-013/manifest-10000/2-after/movie.gif",
+              "encoded_sha256": "917c98fefb7f547b9764028f17903492f58b062e0c94e65444cbaa4d7835bbd4",
+              "packet_metadata_sha256": "5482c9b1a128760072f968d0bd411f8bba499326ef7cd1a2b8eee563af12213f",
+              "videotoolbox_private_sei_normalization": false,
+              "packet_counts": [
+                10000
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

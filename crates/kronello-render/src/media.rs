@@ -11,17 +11,21 @@ pub struct VideoImage {
 /// coordinates. Backends return this from `RenderDag::resolve_video` so only
 /// mapped output pixels are converted — a full working-space frame is never
 /// materialized when the draw covers a smaller window.
+#[derive(Clone)]
 pub struct VideoSource {
     pub size: [u32; 2],
-    sample: Box<dyn Fn(usize, usize) -> [f32; 4]>,
+    sample: std::sync::Arc<dyn Fn(usize, usize) -> [f32; 4] + Send + Sync>,
 }
 impl VideoSource {
     /// `sample` returns the premultiplied linear working-space pixel at
     /// integer source coordinates; callers clamp to `size - 1` first.
-    pub fn new(size: [u32; 2], sample: impl Fn(usize, usize) -> [f32; 4] + 'static) -> Self {
+    pub fn new(
+        size: [u32; 2],
+        sample: impl Fn(usize, usize) -> [f32; 4] + Send + Sync + 'static,
+    ) -> Self {
         Self {
             size,
-            sample: Box::new(sample),
+            sample: std::sync::Arc::new(sample),
         }
     }
     pub fn from_image(image: VideoImage) -> Self {

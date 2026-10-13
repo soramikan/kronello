@@ -185,6 +185,8 @@ pub enum Request {
     RenderSubmit(RenderSubmitRequest),
     #[serde(rename = "job.get")]
     JobGet(JobRequest),
+    #[serde(rename = "job.frames")]
+    JobFrames(JobFramesRequest),
     #[serde(rename = "job.list")]
     JobList(JobListRequest),
     #[serde(rename = "job.cancel")]
@@ -401,6 +403,7 @@ pub enum ResultData {
     Timeline(SequenceQueryResult),
     Movie(Box<kronello_media::AvExportReport>),
     Job(Box<kronello_jobs::JobRecord>),
+    JobFrames(JobFramesResult),
     Jobs(JobListResult),
     Pruned(kronello_jobs::PruneResult),
     Collected(kronello_media::CollectedProject),
@@ -834,6 +837,7 @@ impl<'a> Service<'a> {
                 .get(&r.job)
                 .map(|r| ResultData::Job(Box::new(r)))
                 .map_err(Into::into),
+            Request::JobFrames(r) => self.job_frames(r).map(ResultData::JobFrames),
             Request::JobCancel(r) => self
                 .jobs()?
                 .cancel(&r.job)
@@ -1038,7 +1042,8 @@ impl<'a> Service<'a> {
                     ));
                 }
                 self.render(&r.input, |snapshot, fonts, backend| {
-                    let total = kronello_render::frame_samples(r.range, r.frame_rate)?.len() as u64;
+                    let total = kronello_render::frame_sample_plan(r.range, r.frame_rate)?
+                        .frame_count() as u64;
                     Ok(ResultData::Sequence(render_sequence_with_checkpoint(
                         snapshot,
                         fonts,
@@ -1622,6 +1627,7 @@ fn validate_request_locators(request: &Request) -> Result<(), ServiceError> {
             render_locators(&r.render.input)
         }
         Request::JobGet(_)
+        | Request::JobFrames(_)
         | Request::JobCancel(_)
         | Request::JobResume(_)
         | Request::JobList(_)

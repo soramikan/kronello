@@ -8,6 +8,22 @@ pub(super) struct VideoLeg {
     pub background: [f32; 3],
     pub output: PathBuf,
     pub audio_layout: kronello_model::ChannelMask,
+    pub color: color::OutputColor,
+}
+pub(super) fn conversion_owners(legs: &[VideoLeg]) -> Vec<usize> {
+    (0..legs.len())
+        .map(|index| {
+            (0..index)
+                .find(|&other| {
+                    legs[index].stride() != 0
+                        && legs[other].stride() != 0
+                        && legs[index].color == legs[other].color
+                        && legs[index].background.map(f32::to_bits)
+                            == legs[other].background.map(f32::to_bits)
+                })
+                .unwrap_or(index)
+        })
+        .collect()
 }
 impl VideoLeg {
     pub fn stride(&self) -> usize {
@@ -20,6 +36,32 @@ impl VideoLeg {
         }
     }
 }
+fn encoding_owners(legs: &[VideoLeg], conversions: &[usize]) -> Vec<usize> {
+    // Raster, timestamps, fixed native bitrate/thread policy and selected
+    // runtime are common to this pipeline. Compare every per-leg video input
+    // to the native constructor; final container/audio/metadata remain separate.
+    (0..legs.len())
+        .map(|index| {
+            (0..index)
+                .find(|&other| {
+                    legs[index].profile.shape() == DeliveryShape::Movie
+                        && legs[other].profile.shape() == DeliveryShape::Movie
+                        && conversions[index] == conversions[other]
+                        && legs[index].profile.video_codec() == legs[other].profile.video_codec()
+                        && legs[index].profile.hdr_transfer() == legs[other].profile.hdr_transfer()
+                        && legs[index]
+                            .profile
+                            .dnx_profile()
+                            .map(|(profile, _)| profile.kind())
+                            == legs[other]
+                                .profile
+                                .dnx_profile()
+                                .map(|(profile, _)| profile.kind())
+                })
+                .unwrap_or(index)
+        })
+        .collect()
+}
 pub(super) struct Config {
     pub capabilities: crate::MediaCapabilities,
     pub stage: PathBuf,
@@ -29,6 +71,7 @@ pub(super) struct Config {
     pub bundles: usize,
     pub duration: Rational,
     pub legs: Vec<VideoLeg>,
+    pub diagnostics: crate::ExportDiagnosticsCollector,
 }
 pub(super) type Bundle = Vec<Vec<u8>>;
 pub(super) struct ResultData {
@@ -56,9 +99,11 @@ pub(super) struct Producer {
     sender: SyncSender<Command>,
     events: Receiver<Event>,
     free: Vec<Bundle>,
+    diagnostics: crate::ExportDiagnosticsCollector,
 }
 impl Producer {
     pub fn acquire(&mut self) -> Result<Bundle, MediaError> {
+        let _wait = self.diagnostics.time("pipeline_buffer_acquire");
         if let Some(bundle) = self.free.pop() {
             return Ok(bundle);
         }
@@ -71,6 +116,7 @@ impl Producer {
         }
     }
     fn send(&mut self, command: Command, reason: &str) -> Result<(), MediaError> {
+        let _wait = self.diagnostics.time("pipeline_submit_wait");
         if self.sender.send(command).is_ok() {
             return Ok(());
         }
@@ -129,18 +175,30 @@ pub(super) fn run<T>(
             "video pipeline bundle budget".into(),
         ));
     }
+    let diagnostics = config.diagnostics.clone();
+    let owners = conversion_owners(&config.legs);
     let mut free = Vec::with_capacity(config.bundles);
     for _ in 0..config.bundles {
         let mut bundle = Vec::with_capacity(config.legs.len());
-        for leg in &config.legs {
+        for (index, leg) in config.legs.iter().enumerate() {
             let bytes = (config.pixels[0] as usize)
                 .checked_mul(config.pixels[1] as usize)
-                .and_then(|n| n.checked_mul(leg.stride()))
+                .and_then(|n| {
+                    n.checked_mul(if owners[index] == index {
+                        leg.stride()
+                    } else {
+                        0
+                    })
+                })
                 .ok_or_else(|| MediaError::InvalidInput("video bundle byte overflow".into()))?;
             bundle.push(vec![0; bytes]);
         }
         free.push(bundle);
     }
+    diagnostics.peak_payload(
+        "video_bundles",
+        free.iter().flatten().map(|b| b.len() as u64).sum(),
+    );
     let (sender, commands) = sync_channel(1);
     let (events_sender, events) = channel();
     std::thread::scope(|scope| {
@@ -153,8 +211,10 @@ pub(super) fn run<T>(
             sender,
             events,
             free,
+            diagnostics: diagnostics.clone(),
         };
         let result = (|| {
+            let ready = diagnostics.time("pipeline_encoder_initialization_wait");
             match producer.events.recv() {
                 Ok(Event::Ready) => {}
                 Ok(Event::Finished(Err(error))) => return Err(error),
@@ -164,6 +224,7 @@ pub(super) fn run<T>(
                     ));
                 }
             }
+            drop(ready);
             let output = produce(&mut producer, checkpoint)?;
             let result = producer.finish(checkpoint)?;
             Ok((output, result))
@@ -200,6 +261,7 @@ fn consume(
     commands: &Receiver<Command>,
     events: &Sender<Event>,
 ) -> Result<ResultData, MediaError> {
+    let _diagnostic_scope = config.diagnostics.activate();
     // Open a separate runtime from the exact selected directory. Neither its
     // Rc nor the native shim's mutable error buffer is shared with rendering.
     let runtime = MediaRuntime::load_directory(
@@ -212,8 +274,15 @@ fn consume(
         ));
     }
     let mut sinks = Vec::with_capacity(config.legs.len());
-    let mut files = Vec::with_capacity(config.legs.len());
+    let mut files: Vec<Option<PathBuf>> = Vec::with_capacity(config.legs.len());
+    let conversions = conversion_owners(&config.legs);
+    let encodings = encoding_owners(&config.legs, &conversions);
     for (index, leg) in config.legs.iter().enumerate() {
+        if encodings[index] != index {
+            sinks.push(None);
+            files.push(files[encodings[index]].clone());
+            continue;
+        }
         match leg.profile.shape() {
             DeliveryShape::AudioOnly => {
                 sinks.push(None);
@@ -283,7 +352,10 @@ fn consume(
     events.send(Event::Ready).map_err(|_| stopped())?;
     let mut delivered = 0_usize;
     let mut final_bundle = loop {
-        match commands.recv().map_err(|_| stopped())? {
+        let wait = config.diagnostics.time("pipeline_consumer_input_wait");
+        let command = commands.recv().map_err(|_| stopped())?;
+        drop(wait);
+        match command {
             Command::Frame { bundle, tick, span } => {
                 if span <= 0 || delivered >= config.frames {
                     return Err(MediaError::Encode(
@@ -296,17 +368,28 @@ fn consume(
                         "video frame leg count mismatch".into(),
                     ));
                 }
-                for (bytes, leg) in bundle.iter().zip(&config.legs) {
-                    let expected =
-                        config.pixels[0] as usize * config.pixels[1] as usize * leg.stride();
+                for (index, (bytes, leg)) in bundle.iter().zip(&config.legs).enumerate() {
+                    let expected = config.pixels[0] as usize
+                        * config.pixels[1] as usize
+                        * if conversions[index] == index {
+                            leg.stride()
+                        } else {
+                            0
+                        };
                     if bytes.len() != expected {
                         return Err(MediaError::InvalidInput("video frame size mismatch".into()));
                     }
                 }
-                for (sink, bytes) in sinks.iter_mut().zip(&bundle) {
+                for (index, sink) in sinks.iter_mut().enumerate() {
+                    let bytes = &bundle[conversions[index]];
                     match sink {
-                        Some(Sink::Color { encoder, .. }) => encoder.frame(bytes, tick, span)?,
+                        Some(Sink::Color { encoder, .. }) => {
+                            let _encode = config.diagnostics.time("native_video_conversion_encode");
+                            encoder.frame(bytes, tick, span)?;
+                            config.diagnostics.count("video_encoder_frames", 1);
+                        }
                         Some(Sink::Gif { encoder, spool, .. }) => {
+                            let _gif = config.diagnostics.time("gif_palette_spool");
                             encoder.frame(bytes)?;
                             spool.write_all(bytes)?;
                         }
@@ -343,13 +426,15 @@ fn consume(
                 hardware,
                 stride,
             }) => {
+                let flush = config.diagnostics.time("video_encoder_flush");
                 encoder.finish()?;
+                drop(flush);
                 let pixel_format = encoder.pixel_format.clone();
                 let converted = encoder
                     .frame_size
                     .checked_mul(config.frames as u64)
                     .ok_or_else(|| MediaError::InvalidInput("transfer counter overflow".into()))?;
-                let input_bytes = (final_bundle[index].len() as u64)
+                let input_bytes = (final_bundle[conversions[index]].len() as u64)
                     .checked_mul(config.frames as u64)
                     .ok_or_else(|| MediaError::InvalidInput("transfer counter overflow".into()))?;
                 drop(encoder);
@@ -394,7 +479,7 @@ fn consume(
                 let temp = stage_file(&leg.output)?;
                 encoder.encode_start(temp.path())?;
                 // Reuse one of the two bundles for pass 2, with no third frame.
-                let rgba = &mut final_bundle[index];
+                let rgba = &mut final_bundle[conversions[index]];
                 for _ in 0..config.frames {
                     events.send(Event::Checkpoint).map_err(|_| stopped())?;
                     if !matches!(commands.recv().map_err(|_| stopped())?, Command::Continue) {
@@ -441,7 +526,17 @@ fn consume(
                 result.probes.push(Some(probe));
             }
             None => {
-                result.reports.push(None);
+                let report = if encodings[index] != index {
+                    let mut report = result.reports[encodings[index]]
+                        .clone()
+                        .ok_or_else(|| MediaError::Encode("missing shared video report".into()))?;
+                    report.transfer_path.push_str("_shared_video_stream");
+                    report.transfers = MediaTransferStats::default();
+                    Some(report)
+                } else {
+                    None
+                };
+                result.reports.push(report);
                 result.staged.push(None);
                 result.probes.push(None);
             }
@@ -455,6 +550,7 @@ mod tests {
     use super::*;
     fn config(stage: &Path, output: &Path, frames: usize, profiles: &[MovieProfile]) -> Config {
         Config {
+            diagnostics: crate::ExportDiagnosticsCollector::default(),
             capabilities: MediaRuntime::load().unwrap().capabilities().clone(),
             stage: stage.into(),
             pixels: [64, 64],
@@ -470,12 +566,94 @@ mod tests {
                     background: [0.0; 3],
                     output: output.join(format!("{i}.{}", profile.container())),
                     audio_layout: kronello_model::ChannelMask::STEREO,
+                    color: profile
+                        .hdr_transfer()
+                        .map(color::OutputColor::Hdr)
+                        .unwrap_or(color::OutputColor::Sdr { tone_map: false }),
                 })
                 .collect(),
         }
     }
     #[test]
-    fn two_allocations_per_leg_survive_backpressure_and_gif_second_pass() {
+    fn sharing_keys_cover_color_and_native_encoder_inputs() {
+        let stage = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let mut config = config(
+            stage.path(),
+            output.path(),
+            1,
+            &[
+                MovieProfile::H264AlacV1,
+                MovieProfile::H264AacV1,
+                MovieProfile::HevcAacV1,
+                MovieProfile::DnxhrHqxMovPcm24V1,
+                MovieProfile::DnxhrHqxMxfPcm24V1,
+                MovieProfile::DnxhrHqMovPcm24V1,
+                MovieProfile::ProResPqPcm24V1,
+                MovieProfile::ProResHlgPcm24V1,
+                MovieProfile::H264AacV1,
+                MovieProfile::H264AacV1,
+                MovieProfile::GifV1,
+                MovieProfile::FlacV1,
+            ],
+        );
+        config.legs[8].background = [0.125; 3];
+        config.legs[9].color = color::OutputColor::Sdr { tone_map: true };
+        let conversions = conversion_owners(&config.legs);
+        assert_eq!(conversions, [0, 0, 0, 0, 0, 0, 6, 7, 8, 9, 0, 11]);
+        assert_eq!(
+            encoding_owners(&config.legs, &conversions),
+            [0, 0, 2, 3, 3, 5, 6, 7, 8, 9, 10, 11]
+        );
+    }
+
+    #[test]
+    fn duplicate_movie_uses_one_native_stage_and_counts_transfers_once() {
+        let stage = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        let config = config(
+            stage.path(),
+            output.path(),
+            4,
+            &[MovieProfile::ProResPcm24; 2],
+        );
+        let (_, result) = run(config, &mut |_| Ok(()), |producer, _| {
+            for tick in 0..4 {
+                let mut bundle = producer.acquire()?;
+                assert!(bundle[1].is_empty());
+                for pixel in bundle[0].chunks_exact_mut(4) {
+                    pixel.copy_from_slice(&[37, 89, 123, 255]);
+                }
+                producer.frame(bundle, tick, 1)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(result.files[0], result.files[1]);
+        assert_eq!(std::fs::read_dir(stage.path()).unwrap().count(), 1);
+        assert_eq!(
+            result.reports[0]
+                .as_ref()
+                .unwrap()
+                .transfers
+                .cpu_conversion_input_bytes,
+            4 * 64 * 64 * 4
+        );
+        assert_eq!(
+            result.reports[1].as_ref().unwrap().transfers,
+            MediaTransferStats::default()
+        );
+        assert!(
+            result.reports[1]
+                .as_ref()
+                .unwrap()
+                .transfer_path
+                .ends_with("shared_video_stream")
+        );
+    }
+
+    #[test]
+    fn two_shared_allocations_survive_backpressure_and_gif_second_pass() {
         let stage = tempfile::tempdir().unwrap();
         let output = tempfile::tempdir().unwrap();
         let config = config(
@@ -513,7 +691,8 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(pointers.map(|set| set.len()), [2, 2]);
+        assert_eq!(pointers[0].len(), 2);
+        assert_eq!(pointers[1].len(), 1); // Empty alias, no second pixel allocation.
         assert_eq!(gates, 32);
         assert!(result.files[0].as_ref().unwrap().is_file());
         assert!(result.staged[1].is_some());

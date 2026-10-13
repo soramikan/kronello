@@ -200,3 +200,21 @@ plugin のいずれか 1 つの payload を持ち、plugin ジョブは render s
 - helper プロセスだけが plugin ABI を `dlopen` する。service・worker 自身・
   render 経路は bundle をロードしない。helper 解決・timeout・protocol の
   契約は [audio-000](audio-000.md#audio-011-vst3--au-プラグインホスティングの信頼境界) を参照。
+
+## 書き出し工程の任意観測（PERF-006）
+
+[ADR-0158](../adr/0158-scoped-export-execution-measurements.md)の実行policyである`KRONELLO_EXPORT_DIAGNOSTICS=1`を指定したworkerは、固定名の工程/counterを実行所有で集計し、job directoryの`performance-attempt-N.json`へ記録する。診断の失敗で確定済み成果物を失敗へ戻さない。JobStore clone間の成功した明示write transactionを計数し、heartbeat/checkpoint、別processのsubmit/cancel、read-only/rollbackを区別する。診断の有界性と製品report/receiptのframe数比例保持は別の問題で、後者はPERF-013の未受け入れ範囲。
+
+## PERF-013: 長尺movie/GIFのmetadataとpublication index
+
+[ADR-0165](../adr/0165-bounded-export-metadata-and-receipts.md)に従い、movie/GIF reportはinline64件/1MiBを超えると共通headerと64frames/4MiBのchunkへ移り、descriptorだけをstatus結果へ返す。`job.frames`はjob/attempt/snapshot/range/rate/countに結び付いた64件/16MiB以内のread-only Queryで、header/indexを認証し必要payloadだけを復元する。publication/recoveryの全体検証は全chunkを読む。旧inline receiptの読み出し・復旧は維持する。
+
+出力legとmetadata sidecarは同じpublication bundleへ入れ、artifact entryを外部indexへ逐次書く。root receiptはそのhash/bytes/countを持つ。全rootの確定前fenceとNOREPLACE renameを維持し、partial set・破損・extra fileを拒否する。index/receiptはinput/logのprune後も結果とともに保持する。[ADR-0168](../adr/0168-publication-root-compatibility.md)に従い、非空root数の上限は既存artifact file count budgetから導き、独立した9root制限を課さない。新attemptのstaging準備時には旧attemptのindexとreceiptを両方回収する。
+
+[ADR-0166](../adr/0166-bounded-sequence-metadata.md)に従い、長い画像連番も同じmanifestへmetadataとnumeric/display file参照を保存する。version2の`sequence.json`はdescriptorを持ち、`job.frames.files`で対応する生成名/bytes/hashを返す。directory内のmanifestを最終pathへrelocateしてreceiptをhashし、primary directoryと一緒に公開する。publication/recoveryは各画素fileも逐次検証し、短いversion1と旧receiptも読める。
+
+movie muxは検証済みprivate stageのprobe結果2件を再利用する。native demux/stream-infoと最終container検証は維持する。開始前・64packetごと・trailer前のcheckpointで取消/leaseを確認し、native失敗時は全handleとprivate stageを回収する。64packet間の処理時間はcodec/container/I/Oに依存し、workerの50ms確認policyだけから停止時間上限を保証しない。実測と受け入れ残件は[PERF-013](../testing/perf-013.md)を参照する。
+
+## PERF-009: 制御確認と進捗保存の分離
+
+[ADR-0161](../adr/0161-time-based-worker-progress-and-control-gates.md)に従い、固定render/export workerはcallbackをblock/frameごとに受けつつ、取消/PID/attempt/leaseをread-onlyで50msごとに確認する。進捗は既定200msで同値/減少を保存しない。persist側のtransactionでも条件を再確認し、専用heartbeatと最終公開fenceを維持する。native処理がcallbackを返さない間の停止時間は確認間隔と別に観測する。比較用runtime policyは`KRONELLO_PROGRESS_INTERVAL_MS=100/200/250`、省略200。request/snapshot/作品状態やGUIへ追加しない。受け入れは[PERF-009](../testing/perf-009.md)で追跡する。

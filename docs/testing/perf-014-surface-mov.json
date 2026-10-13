@@ -1,0 +1,3428 @@
+{
+  "trials": [
+    {
+      "pair": 0,
+      "mode": "cpu",
+      "total_ms": 1013.1349999999999,
+      "prepare_ms": 85.326375,
+      "conversion_ms": 415.42491666666666,
+      "encode_ms": 497.76283333333333,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "9b3dab908a618f388451e67910e9b8d022c1e08775595a3e5865a0906781161c",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:9748c5fbee2df7573e50cb22143b6835a82dbc9646a7d792b389f4bf00c34999"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 0,
+      "mode": "gpu",
+      "total_ms": 609.1134999999999,
+      "prepare_ms": 6.002125,
+      "conversion_ms": 77.49695833333331,
+      "encode_ms": 506.45304166666665,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "6347968789df6ad8db837566a6d80b273efaba4c981d5c4aab00504b26867a3b",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:cda7030f8d0b5df8eedecdb0811131d9e83f776d1a9bdb1f5ab019005883d153"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 1,
+      "mode": "gpu",
+      "total_ms": 638.8244589999999,
+      "prepare_ms": 9.409291666666666,
+      "conversion_ms": 85.41895833333334,
+      "encode_ms": 525.3430833333332,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "4fe4a2ab6e0ad02cf54f6579f7b6749b4cd9435e2b229283af02cb6d89cfea2b",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:465e111b9a480f1a67be84c744b4d94e64579baf7926e8d69b0e7d497b406b08"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 1,
+      "mode": "cpu",
+      "total_ms": 993.198291,
+      "prepare_ms": 17.906916666666667,
+      "conversion_ms": 465.7025833333333,
+      "encode_ms": 498.38120833333335,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "440ed563332b323bab6b13c01558a8617dd2b023693672bdd6c13986eddbf297",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:bfae35ee9efd05c414540d0139e0155f04e7d2173333e4ff08a7f334bc63b566"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 2,
+      "mode": "cpu",
+      "total_ms": 954.527292,
+      "prepare_ms": 8.07775,
+      "conversion_ms": 432.62958333333336,
+      "encode_ms": 498.6411666666668,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "d2d7814b63ba6d6d3fa0230813a3a5563f1e1dae74078e39539848eb86eca31f",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:e517acfc99b7a96b631652bc026f5ff41f19a94a87ad147f143d835db266d2dd"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 2,
+      "mode": "gpu",
+      "total_ms": 633.723875,
+      "prepare_ms": 5.521833333333333,
+      "conversion_ms": 86.833,
+      "encode_ms": 525.024,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "76ba92d4ce877d6c6eea740a3ff42b5f7e49bdb51593d8f73756d558aea94841",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:16b2f24c6400914cfb58fe6c9331b8e7ebc6377dca05dfae0dd6368dbb4fafdd"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 3,
+      "mode": "gpu",
+      "total_ms": 643.8425,
+      "prepare_ms": 10.980458333333335,
+      "conversion_ms": 87.66462500000002,
+      "encode_ms": 527.2215416666667,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "c3424ba88500ba9b389ccf643b898fa80d239275dda781e98f332f5f39546481",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:6fbe79bff5793a929c60a12068c18fd3af68b530c1a47f0d48980fd42f9b68e6"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 3,
+      "mode": "cpu",
+      "total_ms": 963.5683750000001,
+      "prepare_ms": 12.059416666666666,
+      "conversion_ms": 438.273375,
+      "encode_ms": 500.8311666666667,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "1c5daa9546872e50041d29419c590b049fd07b3acd3bcf5b130fb9d5ccd47b3f",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:0667ca5607c2e82c077d339de30bced2cee1bc627f01a9d3abb2d04be3d0c7f6"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 4,
+      "mode": "cpu",
+      "total_ms": 951.473834,
+      "prepare_ms": 7.224,
+      "conversion_ms": 434.985375,
+      "encode_ms": 499.3359583333334,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "1e39d53798a04cfe8f0b21bb3727d4519f7a615d847b99b2e7cb84495f9c56da",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:7c5c0348674892d8cac438d48e93d0be550b756a15c997659bffd202ee2ba84f"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 4,
+      "mode": "gpu",
+      "total_ms": 618.339791,
+      "prepare_ms": 5.162291666666667,
+      "conversion_ms": 83.21733333333331,
+      "encode_ms": 513.1017083333335,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "d8f102cdad3dca04bdfe2dd19fda1a49fb5bfde36b13818483d4c035b132a4da",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:52d893330ad70faad0176c8c175d2ca115dd06e2032caaa0a1fc89248ade9b19"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 5,
+      "mode": "gpu",
+      "total_ms": 640.324166,
+      "prepare_ms": 10.625125,
+      "conversion_ms": 85.28387500000001,
+      "encode_ms": 526.4126666666667,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "8881fcb3c4cc80a4cdc334faa62927aa26e4266b69207527e3349a7490738aa8",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:e69f588b05eab572e867de7ca7420d4b9343854003cf886c2b8be2b9400c2ac7"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 5,
+      "mode": "cpu",
+      "total_ms": 970.4275,
+      "prepare_ms": 13.89925,
+      "conversion_ms": 444.75329166666654,
+      "encode_ms": 500.3330833333333,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "170d050310f4091afd5c883a77e880cc7d39e66f880c4c7a421d504d9051e9ed",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:3a0f2fb8b7b5736b836587c0db916ef36f6c5dedbc1b98d8a026b93e0762a2eb"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 6,
+      "mode": "cpu",
+      "total_ms": 953.5327500000001,
+      "prepare_ms": 6.986291666666667,
+      "conversion_ms": 437.3501666666668,
+      "encode_ms": 499.29191666666674,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "68d52bc1be25f9e97e0bbce37015b461e92adada75a7ff32cb91c8caa84af3bf",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:3f73086f53fea160fd5d9cc2e89557457f192be0b5be0c6ec7f405fabba27200"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 6,
+      "mode": "gpu",
+      "total_ms": 621.4095,
+      "prepare_ms": 5.955583333333333,
+      "conversion_ms": 86.73495833333334,
+      "encode_ms": 512.7044583333335,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "208d68e638ff5af54c767fa350f984930f3db1f3b5ac73407889b115af4c4b4c",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:beb8070a2a1dcb972adbb853047a7382d72f6d22d991c94f138de804d28c7cd8"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 7,
+      "mode": "gpu",
+      "total_ms": 632.036917,
+      "prepare_ms": 9.106416666666666,
+      "conversion_ms": 84.8085,
+      "encode_ms": 521.5580833333332,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "a6e001e76e00e63d93585ee59783abe2a7de9eab37d829e6789788e95169d04c",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:282028c15e4dafad665d082980cb790623cac556d785bcf0278cf9d4a9f24603"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 7,
+      "mode": "cpu",
+      "total_ms": 964.462917,
+      "prepare_ms": 11.905083333333334,
+      "conversion_ms": 440.1699583333334,
+      "encode_ms": 501.09895833333326,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "2b4973c529f25a6c417545356b759bfc27da41503c1fd9778f6e694632ac76d2",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:fb86537098bdbce5021bcb05b3163b130a370a413628b929feb259ed0c29317f"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 8,
+      "mode": "cpu",
+      "total_ms": 942.15825,
+      "prepare_ms": 7.261375,
+      "conversion_ms": 424.67224999999996,
+      "encode_ms": 498.9100416666668,
+      "readback_bytes": 1592524800,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "81d2d17a38498b2a4ab0e8da10db9bf759879d8598bda0252026a648eeef36d5",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:691d22629d10023b47fc6b04c2f01dd61d95b6d3bbfbff906cb813db8015c357"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    },
+    {
+      "pair": 8,
+      "mode": "gpu",
+      "total_ms": 616.515417,
+      "prepare_ms": 5.682083333333333,
+      "conversion_ms": 86.42770833333334,
+      "encode_ms": 514.2995000000001,
+      "readback_bytes": 0,
+      "frames": 24,
+      "oracle": {
+        "encoded_sha256": "df13e7fbe3ef8f2d728de63ded8860f1c08274985947dba5c5a88a467bd3663d",
+        "encoded_bytes": 4429276,
+        "streams": [
+          {
+            "codec_type": "video",
+            "codec": "h264",
+            "pixel_format": "yuv420p",
+            "sample_rate": null,
+            "channels": null,
+            "channel_layout": null,
+            "width": 3840,
+            "height": 2160,
+            "color_primaries": "bt709",
+            "color_transfer": "bt709",
+            "color_matrix": "bt709",
+            "color_range": "tv",
+            "initial_padding": null,
+            "decoded_sha256": "2d4765f7c7c50e3ff6760a6ac852c54880afbe9ffdd8890436b0f1a23a08f31e",
+            "decoded_bytes": 298598400,
+            "packets": [
+              {
+                "pts": "0",
+                "dts": "0",
+                "duration": "1/24",
+                "data_hash": "SHA256:33416682752ad333547992f4071d3a0e43743237ae9996fa0b52cf518c23d8e4"
+              },
+              {
+                "pts": "1/24",
+                "dts": "1/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:55c786d7eab5ab40219b5efc5a1647b68d2395db87d27a243343dff80ca88825"
+              },
+              {
+                "pts": "1/12",
+                "dts": "1/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:6c3d85fa51e61e522bcbab8a0ca5c86b41e4c5242c1f40a174b4fce00c65f0e2"
+              },
+              {
+                "pts": "1/8",
+                "dts": "1/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:2c28b98e2e3c71ecd55b5817d6110e089b2b7d79f2edeb425638b7515a161f2d"
+              },
+              {
+                "pts": "1/6",
+                "dts": "1/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:258882a007454178428975be3d8d162c100047a4aef22409f4a4a996fb2362de"
+              },
+              {
+                "pts": "5/24",
+                "dts": "5/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:5b2efd2aee92549cadb91d414438ad9d49862b3d0ad73484bc37c30a9b4b7c2f"
+              },
+              {
+                "pts": "1/4",
+                "dts": "1/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:96d16c7c82cdca57e39ebf211c90c1cb797ade7dad155382631c8ff2f5bc41f9"
+              },
+              {
+                "pts": "7/24",
+                "dts": "7/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:d28b10b1d6fa30c0ab9af75455409ed235bc3b16069c3302fb1d4b0d94e15b09"
+              },
+              {
+                "pts": "1/3",
+                "dts": "1/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:cfdf5f0689f5c5755d6aedb53dae884121043e65590da68b440bab1f21963806"
+              },
+              {
+                "pts": "3/8",
+                "dts": "3/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:6f064f50b67e8e89d56e12ead2d01cc3916008a898faf32645bffb1654a73e73"
+              },
+              {
+                "pts": "5/12",
+                "dts": "5/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:e2d75bd03714029a687238ae04b29e3e8aa3c2f0993f6265fd2042c32ab77901"
+              },
+              {
+                "pts": "11/24",
+                "dts": "11/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:aa7044172cbd1656b911654b86ec19947d191ad372b76c0845f957bd284b65f4"
+              },
+              {
+                "pts": "1/2",
+                "dts": "1/2",
+                "duration": "1/24",
+                "data_hash": "SHA256:4c46552573cdf23d5b692fe2dd58794f167da599a46aa5fde1c0551c41b7d818"
+              },
+              {
+                "pts": "13/24",
+                "dts": "13/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:b40237df4ae62719ac4e583725ea9518b419bd70a37f04522106f748c2e6b23e"
+              },
+              {
+                "pts": "7/12",
+                "dts": "7/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:4f034f9797bd94ab362f56af74519abd69e45435ec55545ee8c6178097b55565"
+              },
+              {
+                "pts": "5/8",
+                "dts": "5/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:bb71b46317a4395ca233d0c36598e9fbf1684ec44f72402af27fbdd3f31d702c"
+              },
+              {
+                "pts": "2/3",
+                "dts": "2/3",
+                "duration": "1/24",
+                "data_hash": "SHA256:07881bfd7976a0d4f19f105840247b3bad3f869fba4470cf1233f39041816b48"
+              },
+              {
+                "pts": "17/24",
+                "dts": "17/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:83231056d19f4570a12ab5072df0ebcc2dc78ba7301dd09de401cc26e05c0cbf"
+              },
+              {
+                "pts": "3/4",
+                "dts": "3/4",
+                "duration": "1/24",
+                "data_hash": "SHA256:dc2b51e2b7fead262866f5ce1a5513b48ae55d713cf3763bc31a4b82f6b792ad"
+              },
+              {
+                "pts": "19/24",
+                "dts": "19/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:913c7560aba4264cf3e9276bcbf12a6bbd089c5bdcfa77c14cd9a05d77912d39"
+              },
+              {
+                "pts": "5/6",
+                "dts": "5/6",
+                "duration": "1/24",
+                "data_hash": "SHA256:d9af36dd6647874a30818ea3e9e592096e341510f2bb28c13babb7808cca1fc2"
+              },
+              {
+                "pts": "7/8",
+                "dts": "7/8",
+                "duration": "1/24",
+                "data_hash": "SHA256:73402dc2573997d7db3a00ed6f4a446e20a50081c67f96948590c549f8842919"
+              },
+              {
+                "pts": "11/12",
+                "dts": "11/12",
+                "duration": "1/24",
+                "data_hash": "SHA256:d8ce0b8d4f8120f4c1ddb3de3f8c48e7fb7dd401e5b4131244213362ffc6afa8"
+              },
+              {
+                "pts": "23/24",
+                "dts": "23/24",
+                "duration": "1/24",
+                "data_hash": "SHA256:99c7d9284227fc67ff8765ca1bbcf28a3e10d4b4c8c70899d0ca0eb430838dde"
+              }
+            ]
+          }
+        ],
+        "chapters": [],
+        "snapshot_tags": {}
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "pair": 0,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009240c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000092e0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 1,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009420c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009380c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 2,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000094c0c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009560c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 3,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000096a0c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009600c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 4,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009740c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000097e0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 5,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009920c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009880c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 6,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b0000030000030000099c0c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009a60c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 7,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009ba0c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009b00c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    },
+    {
+      "pair": 8,
+      "all_picture_and_parameter_nals_equal": true,
+      "private_sei_differences": [
+        {
+          "nal": 0,
+          "cpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009c40c03912b0180",
+          "gpu_hex": "06052d47564adc5c4c433f94efc5113cd143a80100000300010300000300030201fa40000b000003000003000009ce0c03912b0180"
+        }
+      ],
+      "decoded_time_color_equal": true,
+      "packet_payload_equal": false,
+      "encoded_bytes_equal": false
+    }
+  ],
+  "summary": {
+    "cpu": {
+      "first_ms": 1013.1349999999999,
+      "warm_p50_ms": 954.527292,
+      "warm_p95_ms": 993.198291,
+      "warm_conversion_p50_ms": 437.3501666666668
+    },
+    "gpu": {
+      "first_ms": 609.1134999999999,
+      "warm_p50_ms": 632.036917,
+      "warm_p95_ms": 643.8425,
+      "warm_conversion_p50_ms": 85.41895833333334
+    }
+  },
+  "provenance": {
+    "binary_sha256": "db58357870da0aec663ed5e476696d056b8127b1bba55fa51d7ddcb7ff7d30e5",
+    "source_evidence_sha256": "7cabbb2c846bf4facb2d30efa5a4dba88c408a7803d0a217d4ad49636a7348c8",
+    "scope": "Same binary, generated Metal RGBA16F fixture, SDR premultiplied black matte, H.264 hardware encoder, 24 fps. Fresh native objects per trial. Compile/test excluded. Independent decode excluded. MOV preserves CMSampleBuffer times; native callback and independent demux check every exact 1/24 PTS/DTS/duration. Not the product renderer or worker. Compile/test excluded during timing; host-wide quiet not guaranteed. Binary predates the UTF-8 admission guard, which affects rejected paths only; encoder/color/timing code identical.",
+    "host": {
+      "os": "macOS 27.0.1 (26A434)",
+      "architecture": "arm64",
+      "backend": "Metal system default device / required hardware VideoToolbox encoder"
+    }
+  },
+  "fixture": {
+    "dimensions": [
+      3840,
+      2160
+    ],
+    "frames": 24,
+    "rate": [
+      24,
+      1
+    ],
+    "input": "Metal RGBA16F; alpha=0.5 or 1 by alternating 32px blocks; rgb=half(((x+3*i)%256,(y+5*i)%256,(x+y+i)%256)/256)*alpha",
+    "output": "black-matte BT.709 BGRA8 -> hardware H.264 YUV420 video range / MOV, exact 24fps PTS/DTS/duration"
+  },
+  "fixture_sha256": "9a72a26bbe99332e912bec8e182e3da950cfeb4d36536f29a0c6d7ed9126f5a6"
+}

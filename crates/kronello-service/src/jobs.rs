@@ -7,7 +7,7 @@ use kronello_media::{
 };
 use kronello_model::{AssetId, CaptionFormat, ChannelMask, DocumentObject, SequenceId};
 use kronello_render::{
-    RenderProfile, RenderSnapshot, RenderTarget, SequenceRequest, frame_samples,
+    RenderProfile, RenderSnapshot, RenderTarget, SequenceRequest, frame_sample_plan,
 };
 use kronello_time::{Time, TimeRange};
 use serde::{Deserialize, Serialize};
@@ -527,6 +527,30 @@ impl RenderSubmitRequest {
 pub struct JobRequest {
     pub job: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct JobFramesRequest {
+    pub job: String,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(default = "default_frame_page_limit")]
+    #[schemars(range(min = 1, max = 64))]
+    pub limit: usize,
+}
+fn default_frame_page_limit() -> usize {
+    64
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct JobFramesResult {
+    pub job: String,
+    pub attempt: u64,
+    pub total_frames: u64,
+    pub offset: u64,
+    pub next_offset: Option<u64>,
+    pub frames: Vec<kronello_render::FrameMetadata>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<Option<kronello_render::SequenceFrameFiles>>,
+}
 #[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct JobListRequest {}
@@ -793,6 +817,129 @@ fn same_publish_volume(a: &Path, b: &Path) -> bool {
     }
 }
 impl Service<'_> {
+    pub fn job_frames(&self, request: JobFramesRequest) -> Result<JobFramesResult, ServiceError> {
+        if !(1..=64).contains(&request.limit) {
+            return Err(ServiceError::invalid("frame page limit is 1..64"));
+        }
+        let record = self.jobs()?.get(&request.job)?;
+        if record.status != kronello_jobs::JobStatus::Succeeded {
+            return Err(ServiceError::new(
+                "JOB_NOT_READY",
+                "frame metadata requires a succeeded job",
+            ));
+        }
+        let report = record
+            .result
+            .as_ref()
+            .and_then(|r| r.get("report"))
+            .ok_or_else(|| ServiceError::invalid("job has no frame report"))?;
+        if let Some(value) = report.get("frame_metadata") {
+            let manifest: kronello_render::FrameMetadataManifest =
+                serde_json::from_value(value.clone())?;
+            let sequence = report.get("frame_grid").is_some();
+            let (range, rate) = if sequence {
+                (
+                    serde_json::from_value(report["range"].clone())?,
+                    serde_json::from_value(report["frame_rate"].clone())?,
+                )
+            } else {
+                let export: kronello_media::AvExportRequest =
+                    serde_json::from_value(report["request"].clone())?;
+                (export.range, export.frame_rate)
+            };
+            let plan = frame_sample_plan(range, rate)?;
+            let root = if sequence {
+                record.destination.join("frames")
+            } else {
+                kronello_media::metadata_directory(&record.destination)
+            };
+            if manifest.root != root
+                || manifest.identity.render_snapshot_hash != record.snapshot_hash
+                || manifest.identity.frame_count != record.total_frames
+                || manifest.identity.frame_count != plan.frame_count() as u64
+                || manifest.identity.frame_rate != rate
+                || manifest.identity.start_frame != plan.start_frame()
+            {
+                return Err(ServiceError::new(
+                    "OUTPUT_VALIDATION_FAILED",
+                    "frame manifest job binding",
+                ));
+            }
+            if request.offset > manifest.identity.frame_count {
+                return Err(ServiceError::invalid("frame page offset"));
+            }
+            let page = manifest
+                .read_page(request.offset, request.limit)
+                .map_err(|error| {
+                    ServiceError::new(
+                        if error.code() == "RESOURCE_LIMIT" {
+                            "RESOURCE_LIMIT"
+                        } else {
+                            "OUTPUT_VALIDATION_FAILED"
+                        },
+                        error.to_string(),
+                    )
+                })?;
+            Ok(JobFramesResult {
+                job: record.id,
+                attempt: record.attempt,
+                total_frames: manifest.identity.frame_count,
+                offset: request.offset,
+                next_offset: page.next_offset,
+                frames: page.frames,
+                files: page.files,
+            })
+        } else {
+            // Legacy inline receipts remain readable without converting their
+            // result format or writing a derivative manifest during a Query.
+            let inline = report
+                .get("frames")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| ServiceError::invalid("job has no inline frame metadata"))?;
+            if request.offset > inline.len() as u64 {
+                return Err(ServiceError::invalid("frame page offset"));
+            }
+            let mut frames = Vec::new();
+            let mut files = Vec::new();
+            let mut bytes = 0;
+            for value in inline
+                .iter()
+                .skip(request.offset as usize)
+                .take(request.limit)
+            {
+                let size = serde_json::to_vec(value)?.len();
+                if size > kronello_render::FRAME_METADATA_PAGE_BYTES {
+                    return Err(ServiceError::new(
+                        "RESOURCE_LIMIT",
+                        "single frame metadata page",
+                    ));
+                }
+                if bytes + size > kronello_render::FRAME_METADATA_PAGE_BYTES {
+                    break;
+                }
+                bytes += size;
+                if let Some(metadata) = value.get("metadata") {
+                    frames.push(serde_json::from_value(metadata.clone())?);
+                    files.push(Some(kronello_render::SequenceFrameFiles {
+                        numeric: serde_json::from_value(value["numeric"].clone())?,
+                        display: serde_json::from_value(value["display"].clone())?,
+                    }));
+                } else {
+                    frames.push(serde_json::from_value(value.clone())?);
+                }
+            }
+            let next = request.offset + frames.len() as u64;
+            Ok(JobFramesResult {
+                job: record.id,
+                attempt: record.attempt,
+                total_frames: inline.len() as u64,
+                offset: request.offset,
+                next_offset: (next < inline.len() as u64).then_some(next),
+                frames,
+                files,
+            })
+        }
+    }
     /// Embedders supply the same-version executable implementing worker_entry.
     /// CLI and MCP use their own executable by default.
     pub fn with_worker_executable(mut self, executable: PathBuf) -> Self {
@@ -879,8 +1026,8 @@ impl Service<'_> {
                 "media_proxies is a preview-only switch; jobs use originals",
             ));
         }
-        let total_frames =
-            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let total_frames = frame_sample_plan(request.render.range, request.render.frame_rate)?
+            .frame_count() as u64;
         if total_frames == 0 {
             return Err(ServiceError::invalid(
                 "job range must contain at least one frame",
@@ -945,8 +1092,8 @@ impl Service<'_> {
     ) -> Result<(Vec<u8>, Submission), ServiceError> {
         let stored = crate::session::read_snapshot(&request.render.input.project)?;
         let snapshot = self.freeze_submission(&request, &stored)?;
-        let total_frames =
-            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let total_frames = frame_sample_plan(request.render.range, request.render.frame_rate)?
+            .frame_count() as u64;
         let submission = Submission {
             engine_version: env!("CARGO_PKG_VERSION").into(),
             project_id: snapshot.project().id.to_string(),
@@ -1004,8 +1151,8 @@ impl Service<'_> {
             return Ok(kronello_jobs::KeyedSubmission::Replayed(record));
         }
         let snapshot = self.freeze_submission(&request, &stored)?;
-        let total_frames =
-            frame_samples(request.render.range, request.render.frame_rate)?.len() as u64;
+        let total_frames = frame_sample_plan(request.render.range, request.render.frame_rate)?
+            .frame_count() as u64;
         let submission = Submission {
             engine_version: env!("CARGO_PKG_VERSION").into(),
             project_id,
@@ -1168,6 +1315,7 @@ impl Service<'_> {
         store: &JobStore,
         record: &JobRecord,
         fixed: &FixedInput,
+        diagnostics: &kronello_media::ExportDiagnosticsCollector,
     ) -> Result<(), ServiceError> {
         if !fixed.kind_matches_record(record) {
             return Err(ServiceError::new(
@@ -1193,8 +1341,10 @@ impl Service<'_> {
             return crate::capture::execute_capture_job(store, record, capture);
         }
         let (snapshot, request) = fixed.render_parts()?;
+        let validation = diagnostics.time("fixed_input_validation");
         self.validate_fixed_job(record, fixed)?;
-        self.execute_fixed_job(store, record, snapshot, request)
+        drop(validation);
+        self.execute_fixed_job(store, record, snapshot, request, diagnostics)
     }
     pub(crate) fn resume_job(&self, request: JobRequest) -> Result<JobRecord, ServiceError> {
         let store = self.jobs()?;
@@ -1340,6 +1490,25 @@ impl Service<'_> {
                     let (snapshot, _) = fixed.render_parts()?;
                     let report: kronello_media::AvExportReport =
                         serde_json::from_value(result["report"].clone())?;
+                    if let Some(manifest) = &report.frame_metadata {
+                        let plan =
+                            frame_sample_plan(request.render.range, request.render.frame_rate)?;
+                        if !report.frames.is_empty()
+                            || report.schema_version != 2
+                            || manifest.root
+                                != kronello_media::metadata_directory(&record.destination)
+                            || manifest.identity.render_snapshot_hash != record.snapshot_hash
+                            || manifest.identity.frame_rate != request.render.frame_rate
+                            || manifest.identity.start_frame != plan.start_frame()
+                            || manifest.identity.frame_count != record.total_frames
+                        {
+                            return Err(ServiceError::new(
+                                "OUTPUT_VALIDATION_FAILED",
+                                "published frame manifest binding",
+                            ));
+                        }
+                        manifest.verify()?;
+                    }
                     // MEDIA-004: re-validate every published leg against its
                     // own profile shape, destination and frozen snapshot hash.
                     let mut legs = vec![(
@@ -1399,7 +1568,10 @@ impl Service<'_> {
                         && (probe.render_snapshot_hash != record.snapshot_hash
                             || probe.export_snapshot_hash != expected.content_hash()?))
                         || !request.report_video_count_matches(
-                            report.frames.len() as u64,
+                            report
+                                .frame_metadata
+                                .as_ref()
+                                .map_or(report.frames.len() as u64, |m| m.identity.frame_count),
                             record.total_frames,
                             true,
                         )?
@@ -1541,7 +1713,8 @@ impl Service<'_> {
             || serde_json::to_value(request)? != record.output_profile
             || snapshot.project().id.to_string() != record.project_id
             || snapshot.revision().to_string() != record.revision
-            || frame_samples(request.render.range, request.render.frame_rate)?.len() as u64
+            || frame_sample_plan(request.render.range, request.render.frame_rate)?.frame_count()
+                as u64
                 != record.total_frames
         {
             return Err(ServiceError::new(
@@ -1611,7 +1784,9 @@ impl Service<'_> {
         record: &JobRecord,
         snapshot: &RenderSnapshot,
         request: &RenderSubmitRequest,
+        diagnostics: &kronello_media::ExportDiagnosticsCollector,
     ) -> Result<(), ServiceError> {
+        let preparation = diagnostics.time("locked_fonts_staging_preparation");
         let sidecar = matches!(request.output, JobOutput::CaptionSidecar { .. });
         // Sidecar jobs serialize stored cue documents and never rasterize;
         // they do not require locked font inputs.
@@ -1629,8 +1804,29 @@ impl Service<'_> {
         let destination = &request.render.output_directory;
         let staging = store.staging(record)?;
         let stage_path = staging.output();
+        drop(preparation);
         let mut failure = None;
+        let progress_interval_ms = match std::env::var("KRONELLO_PROGRESS_INTERVAL_MS") {
+            Err(std::env::VarError::NotPresent) => 200,
+            Ok(value) if matches!(value.as_str(), "100" | "200" | "250") => {
+                value.parse::<u64>().expect("closed interval set")
+            }
+            _ => {
+                return Err(ServiceError::new(
+                    "INVALID_REQUEST",
+                    "KRONELLO_PROGRESS_INTERVAL_MS must be 100, 200 or 250",
+                ));
+            }
+        };
+        let mut progress = kronello_jobs::WorkerProgress::with_intervals(
+            store.clone(),
+            record,
+            std::time::Duration::from_millis(50),
+            std::time::Duration::from_millis(progress_interval_ms),
+        );
         let mut checkpoint = |completed| {
+            let _checkpoint = diagnostics.time("worker_checkpoint");
+            diagnostics.count("worker_checkpoint_calls", 1);
             #[cfg(all(feature = "test-job-control", debug_assertions))]
             if completed > 0
                 && std::env::var_os("KRONELLO_TEST_JOB_DEVICE_LOST").as_deref()
@@ -1662,7 +1858,7 @@ impl Service<'_> {
                     .and_then(|value| value.parse::<u64>().ok())
                     .unwrap_or(0);
                 while completed >= after && !gate.exists() {
-                    if let Err(error) = store.checkpoint(&record.id, completed) {
+                    if let Err(error) = progress.checkpoint(completed) {
                         let message = error.to_string();
                         failure = Some(error);
                         return Err(message);
@@ -1670,7 +1866,7 @@ impl Service<'_> {
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
             }
-            store.checkpoint(&record.id, completed).map_err(|e| {
+            progress.checkpoint(completed).map_err(|e| {
                 let message = e.to_string();
                 failure = Some(e);
                 message
@@ -1791,6 +1987,7 @@ impl Service<'_> {
                             }
                             // Every leg verifies independently; movie legs also
                             // bind snapshot identities embedded by the muxer.
+                            let validation = diagnostics.time("worker_output_validation");
                             for (index, leg) in report.outputs.iter().enumerate() {
                                 let probe = runtime.probe(&leg.output).map_err(|e| {
                                     ServiceError::new("OUTPUT_VALIDATION_FAILED", e.to_string())
@@ -1815,7 +2012,10 @@ impl Service<'_> {
                                 }
                             }
                             if !request.report_video_count_matches(
-                                report.frames.len() as u64,
+                                report
+                                    .frame_metadata
+                                    .as_ref()
+                                    .map_or(report.frames.len() as u64, |m| m.identity.frame_count),
                                 record.total_frames,
                                 false,
                             )? {
@@ -1824,6 +2024,8 @@ impl Service<'_> {
                                     "MOV frame count or snapshot identity differs",
                                 ));
                             }
+                            drop(validation);
+                            let _serialization = diagnostics.time("report_json_serialization");
                             serde_json::to_value(report)?
                         }
                     };
@@ -1831,10 +2033,23 @@ impl Service<'_> {
                 },
             )
         };
+        let flushed = if failure.is_none() && rendered.is_ok() {
+            progress.flush(record.total_frames)
+        } else {
+            Ok(())
+        };
+        let progress_stats = progress.stats();
+        diagnostics.count("worker_control_checks", progress_stats.control_checks);
+        diagnostics.count("worker_progress_writes", progress_stats.progress_writes);
+        diagnostics.record_duration(
+            "worker_control_max_gap",
+            std::time::Duration::from_micros(progress_stats.max_control_gap_us),
+        );
         if let Some(error) = failure {
             return Err(error.into());
         }
         let mut result = rendered?;
+        flushed?;
         // Paths in the report describe the deliverable rather than staging.
         if let Some(request_json) = result.get_mut("request") {
             request_json["output"] = serde_json::to_value(destination)?;
@@ -1876,21 +2091,6 @@ impl Service<'_> {
         } else {
             stage_path.clone()
         };
-        if request.outputs.is_empty() {
-            store.prepare_publication(record, &artifact_root, result_json.clone())?;
-        } else {
-            // Per-leg destinations let recovery reconcile a renamed set or
-            // refuse a partially published one instead of trusting leg 0.
-            let leg_destinations: Vec<PathBuf> = std::iter::once(destination.clone())
-                .chain(request.outputs.iter().map(|s| s.destination.clone()))
-                .collect();
-            store.prepare_publication_destinations(
-                record,
-                &artifact_root,
-                leg_destinations,
-                result_json.clone(),
-            )?;
-        }
         // Staged leg paths -> publish destinations; computed before the lease
         // transaction so the closure performs only atomic renames.
         let mut publication = Vec::with_capacity(request.outputs.len() + 1);
@@ -1910,6 +2110,53 @@ impl Service<'_> {
                 ));
             }
         }
+        if let Some(value) = result_json["report"].get("frame_metadata") {
+            let manifest: kronello_render::FrameMetadataManifest =
+                serde_json::from_value(value.clone())?;
+            let sequence = matches!(request.output, JobOutput::ImageSequence);
+            let source = if sequence {
+                publication[0].0.join("frames")
+            } else {
+                kronello_media::metadata_directory(&publication[0].0)
+            };
+            let target = if sequence {
+                destination.join("frames")
+            } else {
+                kronello_media::metadata_directory(destination)
+            };
+            if manifest.root != source
+                || manifest.identity.render_snapshot_hash != record.snapshot_hash
+                || manifest.identity.frame_count != record.total_frames
+            {
+                return Err(ServiceError::new(
+                    "OUTPUT_VALIDATION_FAILED",
+                    "frame manifest job identity",
+                ));
+            }
+            if std::fs::symlink_metadata(&target).is_ok() {
+                return Err(ServiceError::new(
+                    "OUTPUT_EXISTS",
+                    "frame metadata destination exists",
+                ));
+            }
+            manifest.verify()?;
+            result_json["report"]["frame_metadata"] =
+                serde_json::to_value(manifest.relocated(target.clone()))?;
+            if sequence {
+                // The metadata directory moves with the sequence root. Its
+                // small manifest must describe final paths before hashing.
+                std::fs::write(
+                    publication[0].0.join("sequence.json"),
+                    serde_json::to_vec_pretty(&result_json["report"])?,
+                )?;
+            } else {
+                publication.push((source, target));
+            }
+        }
+        let receipt = diagnostics.time("publication_receipt_hash_write");
+        store.prepare_publication_bundle(record, &publication, result_json.clone())?;
+        drop(receipt);
+        let publication_timer = diagnostics.time("worker_publication_fence_commit");
         store.publish_attempt(&record.id, record.attempt, result_json, || {
             for (staged, target) in &publication {
                 kronello_jobs::publish_path(staged, target)?;
@@ -1922,6 +2169,7 @@ impl Service<'_> {
             }
             Ok(())
         })?;
+        drop(publication_timer);
         Ok(())
     }
 }
@@ -1931,7 +2179,12 @@ fn validate_sequence(
     count: u64,
     snapshot_hash: &str,
 ) -> Result<(), ServiceError> {
-    if metadata.frames.len() as u64 != count {
+    if metadata
+        .frame_metadata
+        .as_ref()
+        .map_or(metadata.frames.len() as u64, |m| m.identity.frame_count)
+        != count
+    {
         return Err(ServiceError::new(
             "OUTPUT_VALIDATION_FAILED",
             "frame count differs",
@@ -1944,6 +2197,50 @@ fn validate_sequence(
             "OUTPUT_VALIDATION_FAILED",
             "manifest differs",
         ));
+    }
+    if let Some(manifest) = &metadata.frame_metadata {
+        let plan = frame_sample_plan(metadata.range, metadata.frame_rate)?;
+        if metadata.schema_version != 2
+            || !metadata.frames.is_empty()
+            || manifest.root != path.join("frames")
+            || manifest.identity.render_snapshot_hash != snapshot_hash
+            || manifest.identity.frame_rate != metadata.frame_rate
+            || manifest.identity.start_frame != plan.start_frame()
+            || manifest.identity.frame_count != plan.frame_count() as u64
+        {
+            return Err(ServiceError::new(
+                "OUTPUT_VALIDATION_FAILED",
+                "sequence metadata identity",
+            ));
+        }
+        manifest.for_each_frame(|_, _, files| {
+            let files = files.ok_or_else(|| kronello_render::RenderError::Backend {
+                code: "OUTPUT_VALIDATION_FAILED",
+                message: "missing sequence file references".into(),
+            })?;
+            for artifact in [&files.numeric, &files.display] {
+                let mut file = std::fs::File::open(path.join(&artifact.name))?;
+                let mut sha = Sha256::new();
+                let mut size = 0_u64;
+                let mut buffer = [0; 65536];
+                loop {
+                    let n = std::io::Read::read(&mut file, &mut buffer)?;
+                    if n == 0 {
+                        break;
+                    }
+                    sha.update(&buffer[..n]);
+                    size += n as u64;
+                }
+                if size != artifact.bytes || format!("{:x}", sha.finalize()) != artifact.sha256 {
+                    return Err(kronello_render::RenderError::Backend {
+                        code: "OUTPUT_VALIDATION_FAILED",
+                        message: "sequence artifact differs".into(),
+                    });
+                }
+            }
+            Ok(())
+        })?;
+        return Ok(());
     }
     for frame in &metadata.frames {
         if frame.metadata.snapshot_content_hash != snapshot_hash {
@@ -1990,21 +2287,50 @@ pub fn worker_entry() -> Option<std::process::ExitCode> {
         if args.len() != 3 || args[1] != "--job" {
             return Err(JobError::new("INVALID_REQUEST", "worker --job <id>"));
         }
+        let diagnostics = kronello_media::ExportDiagnosticsCollector::from_environment();
+        let _diagnostic_scope = diagnostics.activate();
         let store = JobStore::open(JobConfig::from_env()?)?;
         let id = &args[2];
         let owned_attempt = store.get(id)?.attempt;
         let heartbeat = kronello_jobs::WorkerHeartbeat::start(store.clone(), id.clone());
         let result = (|| {
+            let slot_wait = diagnostics.time("worker_slot_wait");
             store.wait_for_slot(id)?;
+            drop(slot_wait);
+            let read = diagnostics.time("worker_fixed_input_read");
             let record = store.get(id)?;
             let fixed: FixedInput = serde_json::from_slice(&store.input(&record)?)?;
+            drop(read);
+            let _execute = diagnostics.time("worker_execute_fixed");
             Service::new(fixed.backend)
-                .render_fixed_job(&store, &record, &fixed)
+                .render_fixed_job(&store, &record, &fixed, &diagnostics)
                 .map_err(job_error)
         })();
         drop(heartbeat);
         if let Err(error) = &result {
             store.finish_error_attempt(id, owned_attempt, error)?;
+        }
+        if let Some(measurements) = diagnostics.snapshot() {
+            let path = store
+                .directory(id)?
+                .join(format!("performance-attempt-{owned_attempt}.json"));
+            let evidence = serde_json::json!({
+                "schema_version": 1, "job": id, "attempt": owned_attempt,
+                "pid": std::process::id(), "succeeded": result.is_ok(),
+                "worker": measurements, "job_store": store.write_diagnostics(),
+            });
+            // Diagnostics must not turn an already published job into failure.
+            let write = (|| -> Result<(), std::io::Error> {
+                use std::io::Write;
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)?;
+                file.write_all(serde_json::to_string_pretty(&evidence)?.as_bytes())
+            })();
+            if let Err(error) = write {
+                eprintln!("worker performance evidence unavailable job={id}: {error}");
+            }
         }
         result
     })();

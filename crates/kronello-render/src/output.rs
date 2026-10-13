@@ -291,6 +291,16 @@ pub(crate) fn frame_metadata(
     backend: &dyn RenderBackend,
     request: FrameRequest,
 ) -> Result<FrameMetadata, RenderError> {
+    frame_metadata_with_hash(snapshot, scene, backend, request, &snapshot.content_hash()?)
+}
+
+pub(crate) fn frame_metadata_with_hash(
+    snapshot: &RenderSnapshot,
+    scene: &crate::SceneIr,
+    backend: &dyn RenderBackend,
+    request: FrameRequest,
+    hash: &str,
+) -> Result<FrameMetadata, RenderError> {
     let working = snapshot.profile().working_space;
     let metadata = FrameMetadata {
         hdr:snapshot.profile().hdr.map(Into::into),
@@ -298,7 +308,7 @@ pub(crate) fn frame_metadata(
         schema_version: 1,
         snapshot_schema_version: crate::SNAPSHOT_SCHEMA_VERSION,
         project_schema_version: snapshot.project().schema_version,
-        snapshot_content_hash: snapshot.content_hash()?,
+        snapshot_content_hash: hash.into(),
         revision: snapshot.revision().to_string(),
         composition: snapshot.composition(),
         target: snapshot.target(),
@@ -354,7 +364,10 @@ pub(crate) fn frame_metadata(
 
 /// Both frame assembly and movie streaming reserve the float32 peak before
 /// entering the selected backend, including the full cumulative halo.
-fn check_tile_surface_budget(dag: &crate::RenderDag, streaming: bool) -> Result<(), RenderError> {
+pub(crate) fn check_tile_surface_budget(
+    dag: &crate::RenderDag,
+    streaming: bool,
+) -> Result<(), RenderError> {
     const LIMIT: u64 = 512 * 1024 * 1024;
     let bytes = dag.tile_surface_bytes(16)?;
     if bytes > LIMIT {
@@ -520,6 +533,12 @@ pub struct SequenceFrame {
     pub display: OutputFile,
     pub metadata_file: String,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SequenceFrameFiles {
+    pub numeric: OutputFile,
+    pub display: OutputFile,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SequenceMetadata {
@@ -528,11 +547,59 @@ pub struct SequenceMetadata {
     pub frame_rate: FrameRate,
     pub frame_grid: String,
     pub frames: Vec<SequenceFrame>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_metadata: Option<crate::FrameMetadataManifest>,
 }
 
 /// Exact time-zero frame grid, including negative indices. Bounds are ceil of
 /// rate * start/end, so every sample is in [start,end), without accumulated steps.
 pub fn frame_samples(range: TimeRange, rate: FrameRate) -> Result<Vec<(i64, Time)>, RenderError> {
+    frame_sample_plan(range, rate)?.collect()
+}
+
+/// Constant-size exact frame plan; preserves the existing one-million bound.
+#[derive(Clone)]
+pub struct FrameSamplePlan {
+    start: i64,
+    end: i64,
+    next: i64,
+    rate: FrameRate,
+}
+impl FrameSamplePlan {
+    pub fn start_frame(&self) -> i64 {
+        self.start
+    }
+    pub fn frame_count(&self) -> usize {
+        (i128::from(self.end) - i128::from(self.start)) as usize
+    }
+}
+impl Iterator for FrameSamplePlan {
+    type Item = Result<(i64, Time), RenderError>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next >= self.end {
+            return None;
+        }
+        let index = self.next;
+        self.next += 1;
+        Some(
+            self.rate
+                .frame_to_time(index)
+                .map(|time| (index, time))
+                .map_err(Into::into),
+        )
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let count = (i128::from(self.end) - i128::from(self.next)) as usize;
+        (count, Some(count))
+    }
+}
+impl ExactSizeIterator for FrameSamplePlan {}
+impl std::iter::FusedIterator for FrameSamplePlan {}
+
+pub fn frame_sample_plan(
+    range: TimeRange,
+    rate: FrameRate,
+) -> Result<FrameSamplePlan, RenderError> {
     let ceil = |t: Time| -> Result<i64, RenderError> {
         let t = rate.time_to_frame(t)?;
         t.floor()
@@ -547,9 +614,12 @@ pub fn frame_samples(range: TimeRange, rate: FrameRate) -> Result<Vec<(i64, Time
             "sequence exceeds one million frames".into(),
         ));
     }
-    (start..end)
-        .map(|i| Ok((i, rate.frame_to_time(i)?)))
-        .collect()
+    Ok(FrameSamplePlan {
+        start,
+        end,
+        next: start,
+        rate,
+    })
 }
 struct OutputGuard<'a> {
     path: &'a Path,
@@ -663,7 +733,14 @@ fn render_sequence_controlled(
     }
     snapshot.validate()?;
     request.region.validate()?;
-    let samples = frame_samples(request.range, request.frame_rate)?;
+    let samples = frame_sample_plan(request.range, request.frame_rate)?;
+    let frame_count = samples.frame_count();
+    let identity = crate::FrameMetadataIdentity {
+        render_snapshot_hash: snapshot.content_hash()?,
+        frame_rate: request.frame_rate,
+        start_frame: samples.start_frame(),
+        frame_count: frame_count as u64,
+    };
     fs::create_dir(directory)?;
     let mut guard = OutputGuard {
         path: directory,
@@ -672,8 +749,18 @@ fn render_sequence_controlled(
     let staging = tempfile::Builder::new()
         .prefix(".render-staging-")
         .tempdir_in(directory)?;
-    let mut frames = Vec::with_capacity(samples.len());
-    for (ordinal, (index, time)) in samples.into_iter().enumerate() {
+    let mut writer = if frame_count > 64 {
+        Some(crate::FrameMetadataWriter::new(
+            &staging.path().join("frames"),
+            identity.clone(),
+        )?)
+    } else {
+        None
+    };
+    let mut frames: Vec<SequenceFrame> = Vec::new();
+    let mut inline_bytes = 0_usize;
+    for (ordinal, sample) in samples.enumerate() {
+        let (index, time) = sample?;
         checkpoint(ordinal as u64)?;
         let frame_request = FrameRequest {
             time,
@@ -705,38 +792,70 @@ fn render_sequence_controlled(
             &encode_png(&frame.pixels.display, request.region.pixels)?,
         )?;
         let metadata_file = format!("frame-{ordinal:08}.json");
-        write_artifact(
-            staging.path(),
-            metadata_file.clone(),
-            &serde_json::to_vec_pretty(&frame.metadata)?,
-        )?;
-        frames.push(SequenceFrame {
-            metadata: frame.metadata,
-            numeric,
-            display,
-            metadata_file,
-        });
+        let bytes = serde_json::to_vec(&frame.metadata)?.len()
+            + serde_json::to_vec(&numeric)?.len()
+            + serde_json::to_vec(&display)?.len()
+            + 256;
+        if writer.is_none()
+            && (frames.len() == 64 || inline_bytes.saturating_add(bytes) > 1024 * 1024)
+        {
+            let mut spill =
+                crate::FrameMetadataWriter::new(&staging.path().join("frames"), identity.clone())?;
+            for old in frames.drain(..) {
+                fs::remove_file(staging.path().join(old.metadata_file))?;
+                spill.push_with_files(
+                    old.metadata,
+                    Some(SequenceFrameFiles {
+                        numeric: old.numeric,
+                        display: old.display,
+                    }),
+                )?;
+            }
+            writer = Some(spill);
+            inline_bytes = 0;
+        }
+        if let Some(writer) = &mut writer {
+            writer.push_with_files(
+                frame.metadata,
+                Some(SequenceFrameFiles { numeric, display }),
+            )?;
+        } else {
+            write_artifact(
+                staging.path(),
+                metadata_file.clone(),
+                &serde_json::to_vec_pretty(&frame.metadata)?,
+            )?;
+            inline_bytes += bytes;
+            frames.push(SequenceFrame {
+                metadata: frame.metadata,
+                numeric,
+                display,
+                metadata_file,
+            });
+        }
     }
-    checkpoint(frames.len() as u64)?;
+    checkpoint(frame_count as u64)?;
+    let frame_metadata = writer.map(|writer| writer.finish()).transpose()?;
+    if let Some(manifest) = &frame_metadata {
+        manifest.verify()?;
+    }
     let metadata = SequenceMetadata {
-        schema_version: 1,
+        schema_version: if frame_metadata.is_some() { 2 } else { 1 },
         range: request.range,
         frame_rate: request.frame_rate,
         frame_grid: "absolute_time_zero; ceil(start*fps)..ceil(end*fps)".into(),
         frames,
+        frame_metadata: frame_metadata.map(|m| m.relocated(directory.join("frames"))),
     };
     write_artifact(
         staging.path(),
         "sequence.json".into(),
         &serde_json::to_vec_pretty(&metadata)?,
     )?;
-    for frame in &metadata.frames {
-        for name in [
-            &frame.numeric.name,
-            &frame.display.name,
-            &frame.metadata_file,
-        ] {
-            fs::rename(staging.path().join(name), directory.join(name))?;
+    for entry in fs::read_dir(staging.path())? {
+        let entry = entry?;
+        if entry.file_name() != "sequence.json" {
+            fs::rename(entry.path(), directory.join(entry.file_name()))?;
         }
     }
     fs::rename(

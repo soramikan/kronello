@@ -167,6 +167,28 @@ fn hdr_fixture_roundtrip(test_gpu: bool) {
         )
         .unwrap();
         assert_eq!(rendered.pixels.linear, image.pixels);
+        let cached = SequentialVideoRenderBackend::new(&cpu, dir.path(), Ok(&runtime));
+        let plain = SequentialVideoRenderBackend::new(&cpu, dir.path(), Ok(&runtime))
+            .with_source_frame_limits(SourceFrameCacheLimits {
+                entries: 0,
+                bytes: 0,
+            });
+        for time in [
+            Time::ZERO,
+            Rational::new(1, 48).unwrap(),
+            Rational::new(1, 24).unwrap(),
+            Time::ZERO,
+        ] {
+            let request = FrameRequest { time, region };
+            let actual = render_frame(&snapshot, &[], &cached, request).unwrap();
+            let expected = render_frame(&snapshot, &[], &plain, request).unwrap();
+            assert_eq!(actual.pixels, expected.pixels);
+        }
+        assert!(cached.source_frame_cache_stats().hits >= 2);
+        assert!(
+            cached.source_frame_cache_stats().retained_bytes
+                <= SourceFrameCacheLimits::default().bytes
+        );
         assert!(rendered.pixels.display[0][0] < rendered.pixels.linear[0][0]);
         if test_gpu {
             let gpu = kronello_gpu::GpuContext::new().expect("real GPU required; no CPU fallback");

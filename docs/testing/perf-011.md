@@ -1,0 +1,66 @@
+# PERF-011: 音声mix共有と長尺source準備
+
+状態: `done`。[全依頼計画](performance-export-plan.md)のPERF-011を実装・検証中であり、PERF-012〜014も残る。
+
+## 同一音声の共有
+
+`export_audio`は固定render hash（target/全plan/意味版/source lock/gain/effectsを含む）、audio envelope、audio mode、ordered clips、sample範囲、channel layout、clipping方針をSHA-256 keyへ逐次serializeする。codec/container/background/chaptersはPCM24の同一性へ含めない。document planとDSP/WSOLA sessionをgroupごとに一つ作り、mix/量子化を一度だけ行う。
+
+mix quantumは最大4096 framesかつgroup内の最小codec block以下。各codecに渡すblockは小さいadapterで元のnative block長を維持し、partialを最後に一回だけ送る。整列済みのfull blockは借用sliceを直接送る。adapterはcodecが宣言した最大65,536frames×8channels以下の一blockで、全source長のPCMを保持しない。実codec内部の保持とpayload/RSSを区別する。
+
+[実測](perf-011-measurements.json)・[独立packet再検証](perf-011-packet-identity.json)は実`render.submit`→`succeeded`、Metal、固定fixture、交互3pairsずつの初期比較を含む。beforeはPERF-010 `e188f8ae…`、共有mix afterは`f6296ffd…`。源資料は`target/perf-011/`に保存してhashを固定する。静穏hostを保証せず、一部で検証/buildが並行したため短いwall差を一般保証と扱わない。
+
+| ケース | mix frames before→after | mix blocks before→after | adapter peak bytes |
+|---|---:|---:|---:|
+| MOV/FLAC・2000frames | 4000→2000 | 2→1 | 69,632 |
+| PCM24/FLAC・1秒 | 96,000→48,000 | 23→12 | 69,632 |
+| PCM24/FLAC/MP3/ALAC/AAC/Opus・1秒 | 288,000→48,000 | 174→50 | 119,808 |
+| WSOLA＋HPF＋compressor・開始2000/終了8000 | 24,000→6000 | 17→7 | 85,504 |
+
+初期24worker trialsで全decoded PCM/画素、PTS/DTS/duration、layout、codec priming/discard padding、snapshot hash/tags、chaptersと全compressed packet hashが一致した。WebMのcontainer bytes差をpacket一致と区別する。codecごとの最終partial長も元のblock編成を維持する。
+
+単体3件はadapterの複数quantum/block組合せ、全sample順、single final partial、byte予算、失敗伝播、共有keyの差異を確認した。native integrationの`shared_audio_preserves_clipping_and_native_blocks_against_independent_exports`はFLAC/MP3の共有を独立exportの全file bytes・6000frames・clipping数と比較し、Reject時に両出力が未公開であることを確認した。media audio/audio5/audio10/deliveryは30 passed・2 ignored（その後追加した上記1件も成功）。
+
+## spool再利用の評価
+
+既定は従来のprivate spool。`with_audio_spool_cache`または実行policy `KRONELLO_AUDIO_SPOOL_CACHE_ROOT`を明示した試作だけが外部cacheを使う。request/作品/hashへpolicyを追加しない。cacheは8 entries/2GiBのPCM payload、headerは各64KiB、indexは4096 source framesごと32bytesで全PCM quotaに比例した小さい上限になる。
+
+keyはexe bytes、FFmpeg capabilitiesと実library bytes、asset全文hash/stream metadata/index、decode cache版。cache参照の前後で元sourceの全文hashとfingerprintを検証し、全authored source rangeの検査を既存planに残す。range decodeを追加せず、coldでは従来どおり原点から全量decode/resampleする。prerollやDSP/WSOLAの状態遷移も変えない。
+
+OS file lockでwriter/validatorを排他し、競合時はprivate spoolへ戻す。stage内の完成した不変PCMからhard link（別volumeはcopy）し、headerを最後に確定する。private stageを削除してもcacheのreaderは存続する。quota/件数でLRU退避し、live readerが除去を拒否する環境ではadmissionを見送る。writer leaseを取得してから自分のpublication temporaryだけを清掃する。
+
+最初の全PCM再hash方式`d1cbb80c…`はWAV601秒→短区間の初期3pairsでcold1348ms、warm p501178msとなり、private spoolのwarm816msより遅かった。毎回の全PCM検証が約584〜587msを占めたため採用しない。
+
+第二試作`284b2e17…`は小さいindex全文を検証し、読み込む4096frame windowのchecksumをsample返却前に検証する。未参照PCMを読み直さないが、元sourceは全文hashで検証する。参照windowの破損は型付きSourceRead失敗として公開を止め、そのcache headerを退避して次回原点decodeへ戻す。全量source decode・長さとlayout・authored range検査を省く方式ではない。
+
+WAV初期3pairsはcold1343ms、warm p50806ms、before875msだった。ただし各warmは2試行でp95差も大きく、既定採用の根拠としない。圧縮FLAC sourceの9pairs（18 fresh workers）ではprivate spoolのwarm p50309.6ms/p95352.6msに対し、再利用はp50228.4ms/p95254.2ms、cold816.0ms（before308.5ms）だった。後続8試行では毎回source decoder0・spool write0、coldは全量decode/保存1回で、全decoded sample・PTS・packet hashが一致した。cold費用が大きいため既定で有効にせず、反復する長尺source向けの任意policyとして評価を継続する。最初のCLI指定`cpu`は受理されなかったため、実行可能な`cpu-reference`の`…-v2`を証拠にした。
+
+cache単体2件ではstage cleanup後の再利用、参照PCM破損の拒否/header退避/次回再decode、元source書換え拒否、quota超過とwriter競合時のprivate spool継続を検証した。source fieldとnative block adapterを含むmedia unit25件、media all-targets Clippyは成功。
+
+## 残る受け入れ
+
+- GPU寿命修正後の全workspace testsで[SQLite VFS deadlock](sqlite-vfs-deadlock.md)を観測し、依存を修正版へ更新した。更新後のstorage/jobs/full workspace検証の終了結果を確認する。すべての受け入れ前にbacklogをdoneにしない。
+
+## 追加境界検証
+
+cache unit3件で欠落/破損/oversized header/index、取消、途中publication、無関係file保存、LRU/live reader、runtime library bytes変更を確認した。途中publication後に残るindex/payloadを次のwriter leaseで回収する修正を追加した。所有する64hex名の三点組と自分のtemporaryだけを対象とする。
+
+layout/mode/gainの実worker比較をさらに3pairsずつ追加した。5本のstereo/mono duplicate/5.1 duplicateはmix240,000→144,000frames・3groups、document/silence/explicit half duplicate/explicit unityは240,000→192,000frames・4groups。全sample/layout/PTS/packet/hashが一致した。単体silence/group keyテストだけで非共有を主張しない。合計9比較66 successful worker trialsである。
+
+fixtureのmono mask=1は既存APIが正しく拒否したため、実定義MONO=4へ合わせた。schema説明だけが1と誤記されていたのでmodel/project/API schemaとSwift生成hashを修正した。音声単独は映像frames=0へ期待値を合わせ、失敗試行を保存してv3を証拠にする。前sourceで開始したworkspace runは途中のschema差異で停止したため、成功扱いにしない。現sourceのschema generator試験は成功し、GPU変更と合わせた新しいworkspace runを実行中。
+
+## CPU/I/O競合と採否
+
+固定640×360・24frames・長尺WAV sourceから1秒のMOV/FLAC出力を交互3pairs追加した。before=`e188f8ae…`、after=`1f05c438…`。mix96,000→48,000frames、23→12blocks、PCM window read784,384→392,192bytesとなり、全PCM/画素・PTS/layout/priming/chapters/packet/file bytesが一致した。合計10比較72 successful worker trialsである。共有後のmixは約6.0〜6.1ms、decode/spoolは約534〜544ms、private PCM writeは230,784,000bytesで、残る開始前費用はmixよりsource準備が支配的だった。
+
+CPU/ディスクI/O/RSSは100msごととterminal観測時の`proc_pid_rusage_v2`で採取した。CPUのMach tickをhostのtimebase125/3で変換し、0.2秒の実CPU負荷を`getrusage`の差分（約0.195秒）と照合した。取得フィールドは[Appleのrusage実装](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/bsd_kern.c)、時刻単位は[task power実装](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/task.c)とhost SDKの`sys/resource.h`へ対応する。終了前の最終sampleであり、正確なexit totalsやpayloadではない。kernelのdisk readはpage cacheで読んだfile bytesを表さない。
+
+上記の共有後workerはCPU約1.61〜1.63秒、wall約1.39〜1.46秒、kernel disk write約236MB、sampled RSS peak約683〜686MBだった。source検証/PCM spoolと動画codecの費用を含む。短いwall差を一般的な改善率としない。
+
+[競合比較](perf-011-resource-contention.json)では、共有後の同一binaryで4K・24frame動画workerと601秒WAV→短区間FLAC workerを直列/並行に実行した（交互3pairs、計12 workers）。oracleは両worker終了後に実施し、全decoded bits/PTS/packet/file bytesが一致した。後続2試行の両worker完了p50は11,450.5→10,451.6ms、p95は11,462.3→15,641.2ms。通常の音声はCPU約0.75〜0.76秒・kernel write約227MBであり、並行側の最後の試行では動画約15.63秒・音声約1.03秒となった。静穏hostを保証しない探索値なので、p95差を並列化自体の因果と断定しない。
+
+この比較は独立worker間の競合で、同一job内の新しいaudio/video parallel pathの受け入れ証拠ではない。mix重複は共有で除き、反復する長尺圧縮sourceではwindow検証spoolを明示policyで採用する。cold費用と並行試行のばらつきを踏まえ、既定のdisk cacheや同一job内の音声/動画並列化は追加しない。range decodeは未導入であり、resampler/DSP/WSOLA prerollと全authored rangeの検証を原点decodeのまま維持する。
+
+## 最終受け入れ（2026-10-13）
+
+更新後のSQLiteを含む現ソースでfmt・全workspace/all-targets Clippy・全workspace testsが成功した。testsは201 suites・1368 passed・0 failed・50 ignored、ログは`target/perf-sqlite-final-workspace-tests.log`（exit0）。ignoredの全機能を受け入れた意味ではなく、本タスクの実Metal/codec/cancel/cache/lifetime条件は本文の明示実行と固定worker比較で別に確認した。全依頼計画のPERF-013/014は未完了である。

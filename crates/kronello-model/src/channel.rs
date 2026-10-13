@@ -189,7 +189,7 @@ impl schemars::JsonSchema for ChannelMask {
             "type": "integer",
             "format": "uint64",
             "minimum": 0,
-            "description": "Versioned speaker-layout bitset (channel_mask v1): 1=mono, 3=stereo, 1551=5.1(side), 63=5.1(back), 1599=7.1"
+            "description": "Versioned speaker-layout bitset (channel_mask v1): 4=mono, 3=stereo, 1551=5.1(side), 63=5.1(back), 1599=7.1"
         })
     }
 }

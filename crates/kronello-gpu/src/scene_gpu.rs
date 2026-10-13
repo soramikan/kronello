@@ -592,7 +592,10 @@ impl ScenePass<'_> {
             pass.set_bind_group(0, &bind, &[]);
             pass.dispatch_workgroups(resolution[0].div_ceil(8), resolution[1].div_ceil(8), 1);
         }
-        self.gpu.queue.submit([encoder.finish()]);
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.gpu.queue.submit([encoder.finish()]);
+        }
         self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
@@ -739,7 +742,10 @@ impl ScenePass<'_> {
                 1,
             );
         }
-        self.gpu.queue.submit([encoder.finish()]);
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.gpu.queue.submit([encoder.finish()]);
+        }
         self.stats.gpu_compute_dispatches += 1;
         Ok(output)
     }
@@ -1098,7 +1104,7 @@ impl ScenePass<'_> {
             Ok(blurred)
         }
     }
-    fn validate(&mut self) -> Result<(), GpuError> {
+    fn track_validation(&mut self) {
         self.controls.push((
             self.validation.clone(),
             self.gpu.track_resource(
@@ -1106,6 +1112,9 @@ impl ScenePass<'_> {
                 self.validation.size(),
             ),
         ));
+    }
+    fn validate(&mut self) -> Result<(), GpuError> {
+        self.track_validation();
         let _allocation = self
             .gpu
             .track_resource(crate::allocation::ResourceKind::Readback, 4);
@@ -1117,7 +1126,10 @@ impl ScenePass<'_> {
         });
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         encoder.copy_buffer_to_buffer(&self.validation, 0, &readback, 0, 4);
-        self.gpu.queue.submit([encoder.finish()]);
+        {
+            let _measure = kronello_render::measure_execution_stage("gpu_command_submit_host");
+            self.gpu.queue.submit([encoder.finish()]);
+        }
         let (send, receive) = std::sync::mpsc::channel();
         readback
             .slice(..)
@@ -1146,10 +1158,13 @@ impl ScenePass<'_> {
         }
         // Publish only after the entire graph's sticky status is known valid.
         // A later opaque draw must not hide an invalid cached intermediate.
+        self.publish_validated_cache();
+        Ok(())
+    }
+    fn publish_validated_cache(&self) {
         for (key, surface) in &self.pending_cache {
             self.gpu.retain_surface(*key, surface.lease.clone());
         }
-        Ok(())
     }
     fn node(
         &mut self,
@@ -1339,6 +1354,7 @@ impl GpuContext {
         scene: &DrawScene,
         working: WorkingSpace,
     ) -> Result<ScenePass<'_>, GpuError> {
+        let _measure = kronello_render::measure_execution_stage("gpu_scene_preparation_host");
         let scope = self.render_scope()?;
         size.validate()?;
         scene.validate()?;
@@ -1608,13 +1624,16 @@ impl GpuContext {
         pass.allow_disk = allow_disk;
         let mut cache = vec![None; scene.nodes.len()];
         let linear = pass.composite(scene, &scene.roots, &mut cache)?;
-        pass.validate()?;
+        pass.track_validation();
+        let mut readbacks =
+            self.read_textures_validated(&[linear.texture()], &pass.validation, &mut pass.stats)?;
+        pass.publish_validated_cache();
         if pass.allow_disk {
             for (key, surface) in &pass.pending_cache {
                 self.persist_surface(*key, surface, &mut pass.stats)?;
             }
         }
-        let linear = decode_rgba16f(&self.read_texture(linear.texture(), 8, &mut pass.stats)?)?;
+        let linear = decode_rgba16f(&readbacks.remove(0))?;
         Ok((linear, pass.stats))
     }
     pub(crate) fn render_scene_texture_cached(
@@ -1977,6 +1996,18 @@ mod coverage_bounds_tests {
                 for _ in 0..2 {
                     assert!(matches!(
                         draw(&gpu, &scene, enabled, Some(&keys)),
+                        Err(GpuError::InvalidInput(
+                            "RGBA16F surface value outside finite representable range"
+                        ))
+                    ));
+                    assert!(matches!(
+                        gpu.render_scene_linear_cached(
+                            RenderSize::pixels(48, 32),
+                            &scene,
+                            WorkingSpace::LinearRec709,
+                            &keys,
+                            false
+                        ),
                         Err(GpuError::InvalidInput(
                             "RGBA16F surface value outside finite representable range"
                         ))
